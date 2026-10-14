@@ -1277,3 +1277,117 @@ fn rtl_locations_read_right_to_left() {
     set_current(Lang::EN);
     assert_eq!(location("Home › Font"), "Home › Font");
 }
+
+#[test]
+fn arabic_locales_and_saved_preference_work_without_changing_the_document() {
+    let ar = lang("ar");
+    for tag in ["ar", "ar-SA", "ar_EG.UTF-8", "AR-ae", "ar-Arab-MA", "ar_TN.UTF-8@euro"] {
+        assert_eq!(lang_from_tag(tag), Some(ar), "{tag}");
+    }
+    assert_eq!(first_supported([UNSUPPORTED, "ar-TN", "en-US"]), Some(ar));
+    let mut app = crate::WordApp::new(wordcraft_engine::Session::new(wordcraft_engine::sample::sample_document()), Default::default());
+    let before = serde_json::to_value(&app.session.doc).unwrap();
+    let result = app.run("ui.language", serde_json::json!({"value": "AR"})).unwrap();
+    assert_eq!(result["effective"], "ar");
+    assert_eq!(app.ui.language, "ar");
+    assert_eq!(serde_json::to_value(&app.session.doc).unwrap(), before);
+    let saved = serde_json::to_string(&app.ui).unwrap();
+    let restored: crate::UiState = serde_json::from_str(&saved).unwrap();
+    assert_eq!(Lang::from_pref(&restored.language), ar);
+    assert_eq!(ar.name(), "العربية");
+    assert!(ar.is_rtl());
+    assert_eq!(ar.editing_lang(), None);
+}
+
+#[test]
+fn only_arabic_is_right_to_left() {
+    for l in Lang::all() {
+        assert_eq!(l.is_rtl(), l.code() == "ar", "{}", l.code());
+    }
+}
+
+#[test]
+fn arabic_catalog_has_the_core_terms_and_keeps_placeholders() {
+    let ar = lang("ar");
+    // Entries are stored in draw order: single words are one run and read the same.
+    assert_eq!(tr(ar, "File"), "ملف");
+    assert_eq!(tr(ar, "Save"), "حفظ");
+    assert_eq!(tr(ar, "Undo"), "تراجع");
+    assert_eq!(tr(ar, "Bold"), "غامق");
+    assert_eq!(tr(ar, "Home"), crate::bidi::visual("الصفحة الرئيسية", true));
+    assert_eq!(tr(ar, "Save As"), crate::bidi::visual("حفظ باسم", true));
+    assert_eq!(tr(ar, "Add Font…"), crate::bidi::visual("إضافة خط…", true));
+    assert_eq!(tr(ar, "unknown future label"), "unknown future label");
+    // Count-neutral wording; digits stay Western.
+    let words = fmt_translated(tr(ar, "{words} words"), &[("words", "21")]);
+    assert!(words.contains("21"), "{words}");
+    assert!(!words.chars().any(|c| ('\u{0660}'..='\u{0669}').contains(&c)));
+}
+
+/// Every Arabic character the catalog draws has a glyph in the interface fonts (the installed or
+/// craft-fonts Arabic face right after Inter), so nothing shows as a box.
+#[test]
+fn arabic_catalog_is_covered_by_the_interface_fonts() {
+    let available = wordcraft_fonts::system_arabic_ui_font().is_some() || !wordcraft_fonts::arabic_ui_fonts().is_empty();
+    if !available {
+        eprintln!("skipped: no Arabic face installed");
+        return;
+    }
+    let ctx = egui::Context::default();
+    ctx.set_fonts(crate::theme::font_definitions(false, false, true));
+    // Fonts apply on the next pass.
+    let mut out = ctx.run_ui(egui::RawInput::default(), |_| {});
+    out.textures_delta.clear();
+    let (entries, errors) = parse_entries(lang("ar").0.source);
+    assert!(errors.is_empty(), "{errors:?}");
+    let font = crate::theme::regular(12.5);
+    let mut chars: Vec<char> = entries
+        .iter()
+        .flat_map(|e| e.translation.chars())
+        .filter(|c| ('\u{0600}'..='\u{06FF}').contains(c) || ('\u{0750}'..='\u{077F}').contains(c) || ('\u{FB50}'..='\u{FEFF}').contains(c))
+        .collect();
+    chars.sort_unstable();
+    chars.dedup();
+    assert!(chars.len() > 30, "{} Arabic characters", chars.len());
+    let missing: Vec<String> =
+        ctx.fonts_mut(|f| chars.iter().filter(|c| !f.has_glyph(&font, **c)).map(|c| format!("{c} U+{:04X}", *c as u32)).collect());
+    assert!(missing.is_empty(), "Arabic characters without a glyph: {missing:?}");
+}
+
+#[test]
+fn switching_to_arabic_and_back_restores_fonts() {
+    let available = wordcraft_fonts::system_arabic_ui_font().is_some() || !wordcraft_fonts::arabic_ui_fonts().is_empty();
+    let ctx = egui::Context::default();
+    let mut app = crate::WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::new()), Default::default());
+    let mut t = 0.0;
+    let mut frames = |app: &mut crate::WordApp| {
+        for _ in 0..4 {
+            t += 0.1;
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0))),
+                time: Some(t),
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                app.logic(ui.ctx());
+                app.ui(ui);
+            });
+            out.textures_delta.clear();
+        }
+    };
+    let font = crate::theme::regular(12.5);
+    let has_arabic_glyph = |ctx: &egui::Context| ctx.fonts_mut(|f| f.has_glyph(&font, '\u{0639}'));
+    frames(&mut app);
+    assert!(!app.fonts_arabic);
+    assert!(!has_arabic_glyph(&ctx));
+    app.run("ui.language", serde_json::json!({"value": "ar"})).unwrap();
+    frames(&mut app);
+    assert!(app.fonts_arabic);
+    if available {
+        assert!(has_arabic_glyph(&ctx), "the Arabic face is in the interface fonts while Arabic is current");
+    }
+    app.run("ui.language", serde_json::json!({"value": "en"})).unwrap();
+    frames(&mut app);
+    assert!(!app.fonts_arabic);
+    assert!(!has_arabic_glyph(&ctx), "the Arabic face is gone again");
+}
