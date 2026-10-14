@@ -262,7 +262,7 @@ mod tests {
             return None;
         };
         eprintln!("Arabic face: {} {}", face.family, face.style);
-        let mut defs: FontDefinitions = crate::theme::font_definitions(false, false);
+        let mut defs: FontDefinitions = crate::theme::font_definitions(false, false, false);
         let mut data = FontData::from_owned(face.data().to_vec());
         data.index = face.index();
         defs.font_data.insert("probe-arabic".into(), Arc::new(data));

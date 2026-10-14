@@ -418,7 +418,7 @@ fn chinese_interface_fonts_load_and_cover_simplified_hanzi() {
     // #241: without an embedded Chinese face the interface adds an installed CJK font; egui must
     // accept it (it panics on font data it can't parse) and draw simplified-only hanzi with it.
     let ctx = egui::Context::default();
-    ctx.set_fonts(crate::theme::font_definitions(true, true));
+    ctx.set_fonts(crate::theme::font_definitions(true, true, false));
     ctx.run_ui(Default::default(), |_| {}).textures_delta.clear();
     let covered = ctx.fonts_mut(|f| f.has_glyphs(&egui::FontId::proportional(14.0), "删除页选"));
     let (catalogs, _) = Lang::cjk_font_text(true);
@@ -443,7 +443,7 @@ fn cjk_catalogs_are_covered_by_the_embedded_interface_faces() {
     for code in ["zh-hans", "zh-hant", "ja"] {
         let l = lang(code);
         let ctx = egui::Context::default();
-        ctx.set_fonts(crate::theme::font_definitions(l.prefers_hans(), false));
+        ctx.set_fonts(crate::theme::font_definitions(l.prefers_hans(), false, false));
         ctx.run_ui(Default::default(), |_| {}).textures_delta.clear();
         let (entries, errors) = parse_entries(l.0.source);
         assert!(errors.is_empty(), "{code}: {errors:?}");

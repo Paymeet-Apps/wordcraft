@@ -3362,7 +3362,7 @@ mod tests {
                 if fonts {
                     show(app, &ctx);
                 } else {
-                    crate::theme::install_fonts_for(&ctx, false);
+                    crate::theme::install_fonts_for(&ctx, false, false);
                     fonts = true;
                 }
             },

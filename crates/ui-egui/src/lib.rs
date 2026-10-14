@@ -396,6 +396,8 @@ pub struct WordApp {
     fonts_hans: bool,
     /// Whether the installed UI fonts include an installed CJK fallback font (#241).
     fonts_system_cjk: bool,
+    /// Whether the installed UI fonts include the Arabic interface face (a right-to-left language).
+    fonts_arabic: bool,
     /// CJK text is (about to be) on screen in a non-CJK interface, e.g. the language names in
     /// File ▸ Options: load the installed CJK fallback font if no embedded face covers it.
     pub(crate) want_system_cjk: bool,
@@ -510,6 +512,7 @@ impl WordApp {
             styled: false,
             fonts_hans: false,
             fonts_system_cjk: false,
+            fonts_arabic: false,
             want_system_cjk: false,
             fonts_frames: 0,
             applied_theme: None,
@@ -1473,8 +1476,9 @@ impl WordApp {
     /// face has changed since the last install.
     fn install_ui_fonts(&mut self, ctx: &egui::Context, lang: i18n::Lang) {
         let system_cjk = self.fonts_system_cjk || self.want_system_cjk || lang.uses_cjk();
-        if !self.styled || lang.prefers_hans() != self.fonts_hans || system_cjk != self.fonts_system_cjk {
-            theme::install_fonts_extra(ctx, lang.prefers_hans(), system_cjk, &self.canvas.ime_faces);
+        if !self.styled || lang.prefers_hans() != self.fonts_hans || system_cjk != self.fonts_system_cjk || lang.is_rtl() != self.fonts_arabic {
+            theme::install_fonts_extra(ctx, lang.prefers_hans(), system_cjk, lang.is_rtl(), &self.canvas.ime_faces);
+            self.fonts_arabic = lang.is_rtl();
             self.fonts_hans = lang.prefers_hans();
             self.fonts_system_cjk = system_cjk;
             // Mod with -, = and 0 are Word shortcuts (optional hyphen, subscript, paragraph spacing);
@@ -3078,7 +3082,7 @@ mod tests {
                     if fonts {
                         dialogs::show(app, &ctx);
                     } else {
-                        theme::install_fonts_for(&ctx, false);
+                        theme::install_fonts_for(&ctx, false, false);
                         fonts = true;
                     }
                 },
@@ -3130,7 +3134,7 @@ mod tests {
                     if fonts {
                         dialogs::show(app, &ctx);
                     } else {
-                        theme::install_fonts_for(&ctx, false);
+                        theme::install_fonts_for(&ctx, false, false);
                         fonts = true;
                     }
                 },

@@ -1196,7 +1196,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                 );
                 if !new.is_empty() {
                     app.canvas.ime_faces.extend(new);
-                    crate::theme::install_fonts_extra(ui.ctx(), app.fonts_hans, app.fonts_system_cjk, &app.canvas.ime_faces);
+                    crate::theme::install_fonts_extra(ui.ctx(), app.fonts_hans, app.fonts_system_cjk, app.fonts_arabic, &app.canvas.ime_faces);
                     ui.ctx().request_repaint();
                 }
                 let caret_color = caret_color(app);

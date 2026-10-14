@@ -857,7 +857,7 @@ mod tests {
     #[test]
     fn big_button_label_lines_fit_their_slot() {
         let ctx = egui::Context::default();
-        ctx.set_fonts(crate::theme::font_definitions(false, false));
+        ctx.set_fonts(crate::theme::font_definitions(false, false, false));
         ctx.run_ui(egui::RawInput::default(), |_| {}).drop_without_applying_deltas();
         let h = ctx.fonts_mut(|f| f.layout_no_wrap("Page Number Mail Merge gjpqy".into(), crate::theme::regular(11.5), Color32::WHITE).size().y);
         assert!(h <= LABEL_LINE_H, "label line is {h} px tall");
