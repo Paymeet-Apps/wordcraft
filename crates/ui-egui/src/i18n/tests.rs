@@ -103,7 +103,7 @@ fn placeholders_fill_without_reinterpreting_values() {
 #[test]
 fn malformed_catalog_lines_are_skipped_not_fatal() {
     let (c, errors) =
-        Catalog::parse("# c\n\tHello\t你好\nctx\tA\tB\n\tOpen…\t打开\n\tPage {n}\t第 {m} 页\nno tabs\n\tHello\t重复\n\tLine\\nTwo\t一\\n二\n");
+        Catalog::parse("# c\n\tHello\t你好\nctx\tA\tB\n\tOpen…\t打开\n\tPage {n}\t第 {m} 页\nno tabs\n\tHello\t重复\n\tLine\\nTwo\t一\\n二\n", false);
     assert_eq!(errors.len(), 5, "{errors:?}");
     assert_eq!(c.plain("Hello"), Some("你好"), "the first entry wins");
     assert_eq!(c.plain("Line\nTwo"), Some("一\n二"));
@@ -604,7 +604,7 @@ fn spanish_built_in_style_names_are_translated() {
 
 #[test]
 fn context_entries_override_only_their_context_and_unknown_contexts_are_rejected() {
-    let (c, errors) = Catalog::parse("\tTitle\tЗаголовок\npreview\tTitle\tТитул\n\tFont\tШрифт\nnope\tFont\tX\n");
+    let (c, errors) = Catalog::parse("\tTitle\tЗаголовок\npreview\tTitle\tТитул\n\tFont\tШрифт\nnope\tFont\tX\n", false);
     assert_eq!(errors.len(), 1, "{errors:?}");
     assert!(errors[0].contains("unknown context"));
     assert_eq!(c.plain("Title"), Some("Заголовок"));
@@ -1210,4 +1210,53 @@ fn bundled_interface_fonts_cover_bulgarian_without_system_fallbacks() {
         }
     }
     assert!(!lang("bg").uses_cjk());
+}
+
+// ---- right-to-left catalogs (L10N-AR.3) ----
+
+/// A test-only right-to-left language (no real one is registered yet).
+static TEST_RTL: LangInfo = LangInfo {
+    code: "xx-rtl",
+    name: "RTL",
+    source: "\tSaved {path}\tتم الحفظ: {path}\n\tPage {page} of {pages}\tصفحة {page} من {pages}\n\tHome\tالرئيسية\n\tFont\tالخط\n",
+    prefer_hans: false,
+    rtl: true,
+    editing_lang: None,
+    catalog: OnceLock::new(),
+};
+
+#[test]
+fn rtl_catalog_entries_are_stored_in_visual_order() {
+    let (c, errors) = Catalog::parse("\tSaved {path}\tتم الحفظ: {path}\n\tPage {page} of {pages}\tصفحة {page} من {pages}\n", true);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(c.plain("Page {page} of {pages}"), Some("{pages} من {page} صفحة"));
+    let (ltr, _) = Catalog::parse("\tPage {page} of {pages}\tصفحة {page} من {pages}\n", false);
+    assert_eq!(ltr.plain("Page {page} of {pages}"), Some("صفحة {page} من {pages}"));
+}
+
+#[test]
+fn fmt_isolates_inserted_values_in_rtl() {
+    set_current(Lang(&TEST_RTL));
+    let template = t("Saved {path}");
+    let english = fmt(template, &[("path", "report.docx")]);
+    assert!(english.contains("report.docx"), "{english}");
+    let arabic = fmt(template, &[("path", "تقرير.docx")]);
+    assert_eq!(arabic, crate::bidi::visual("تم الحفظ: تقرير.docx", true));
+    assert_eq!(fmt(t("Page {page} of {pages}"), &[("page", "3"), ("pages", "9")]), "9 من 3 صفحة");
+    set_current(Lang::EN);
+}
+
+#[test]
+fn ltr_fmt_is_unchanged() {
+    set_current(Lang::EN);
+    assert_eq!(fmt("Saved {path}", &[("path", "تقرير.docx")]), "Saved تقرير.docx");
+    assert_eq!(fmt("{a} {b} {c}", &[("a", "1"), ("b", "{a}")]), "1 {a} {c}");
+}
+
+#[test]
+fn rtl_locations_read_right_to_left() {
+    set_current(Lang(&TEST_RTL));
+    assert_eq!(location("Home › Font"), "الخط ‹ الرئيسية");
+    set_current(Lang::EN);
+    assert_eq!(location("Home › Font"), "Home › Font");
 }

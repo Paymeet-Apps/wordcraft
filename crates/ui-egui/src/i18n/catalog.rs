@@ -115,10 +115,14 @@ pub fn parse_entries(text: &str) -> (Vec<Entry>, Vec<String>) {
 
 impl Catalog {
     /// Build a catalog from its valid entries; the errors of the skipped lines come back too.
-    pub fn parse(text: &str) -> (Catalog, Vec<String>) {
+    /// With `rtl`, every translation is stored in draw order (`bidi::visual`, right-to-left base).
+    pub fn parse(text: &str, rtl: bool) -> (Catalog, Vec<String>) {
         let (entries, errors) = parse_entries(text);
         let mut catalog = Catalog::default();
-        for e in entries {
+        for mut e in entries {
+            if rtl {
+                e.translation = crate::bidi::visual(&e.translation, true).into_owned();
+            }
             if e.context.is_empty() {
                 catalog.plain.insert(e.source, e.translation);
             } else {

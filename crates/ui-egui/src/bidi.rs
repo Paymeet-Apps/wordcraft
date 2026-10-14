@@ -65,7 +65,6 @@ fn placeholder_len(s: &str, i: usize) -> Option<usize> {
 
 /// The direction of the first strong character (UAX #9 P2); false when there is none.
 /// `{name}` placeholders are skipped: they are filled in later and are not part of the wording.
-#[cfg_attr(not(test), allow(dead_code))] // used from i18n in Task 3
 pub(crate) fn first_strong_is_rtl(s: &str) -> bool {
     let mut skip_to = 0;
     for (i, c) in s.char_indices() {
@@ -187,7 +186,6 @@ fn visual_line(line: &str, base_rtl: bool, out: &mut String) {
 /// when drawing it as it stands is already right: no strong right-to-left character and an LTR
 /// base, a single right-to-left run, or text beyond the 64 KiB cap. The output holds no bidi
 /// control characters.
-#[cfg_attr(not(test), allow(dead_code))] // used from i18n in Task 3
 pub(crate) fn visual(s: &str, base_rtl: bool) -> Cow<'_, str> {
     if s.len() > MAX_LEN || (!base_rtl && !s.chars().any(|c| is_strong_rtl(c) || is_bidi_control(c))) {
         return Cow::Borrowed(s);
@@ -202,9 +200,40 @@ pub(crate) fn visual(s: &str, base_rtl: bool) -> Cow<'_, str> {
     if out == s { Cow::Borrowed(s) } else { Cow::Owned(out) }
 }
 
+/// Breaks `text` at spaces so each line measures at most `width` (by `measure`), then converts
+/// every line with [`visual`]. egui would otherwise wrap the already-reordered string and put the
+/// logical end of the text on top. A word wider than `width` sits alone on its line; empty text
+/// gives no lines; a `width` of zero or less puts one word on each line.
+// Used by the RTL label call sites (later tasks).
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn wrap(text: &str, base_rtl: bool, width: f32, measure: impl Fn(&str) -> f32) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for paragraph in text.split('\n') {
+        let mut line = String::new();
+        for word in paragraph.split(' ').filter(|w| !w.is_empty()) {
+            if line.is_empty() {
+                line.push_str(word);
+                continue;
+            }
+            let candidate = format!("{line} {word}");
+            if measure(&candidate) <= width {
+                line = candidate;
+            } else {
+                lines.push(std::mem::take(&mut line));
+                line.push_str(word);
+            }
+        }
+        lines.push(line);
+    }
+    if text.is_empty() {
+        lines.clear();
+    }
+    lines.iter().map(|l| visual(l, base_rtl).into_owned()).collect()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{first_strong_is_rtl, visual};
+    use super::{first_strong_is_rtl, visual, wrap};
     use egui::{Color32, Context, FontData, FontDefinitions, FontFamily, FontId, RawInput};
     use std::borrow::Cow;
     use std::sync::Arc;
@@ -395,5 +424,32 @@ mod tests {
         assert!(!first_strong_is_rtl("123"));
         // A placeholder's name is not a strong character of the string.
         assert!(first_strong_is_rtl("{count} ملف"));
+    }
+
+    #[test]
+    fn wrap_breaks_logically_then_reorders_each_line() {
+        let m = |s: &str| s.chars().count() as f32;
+        let lines = wrap("حفظ الملف بتنسيق PDF الآن", true, 16.0, m);
+        assert_eq!(lines.len(), 2, "{lines:?}");
+        assert_eq!(lines[0], visual("حفظ الملف بتنسيق", true));
+        assert_eq!(lines[1], visual("PDF الآن", true));
+    }
+
+    #[test]
+    fn wrap_survives_degenerate_input() {
+        let m = |s: &str| s.chars().count() as f32;
+        assert!(wrap("", true, 10.0, m).is_empty());
+        assert_eq!(wrap("a bb ccc", false, 0.0, m), ["a", "bb", "ccc"]);
+        assert_eq!(wrap("a bb ccc", false, -5.0, m), ["a", "bb", "ccc"]);
+        assert_eq!(wrap("a verylongword b", false, 4.0, m), ["a", "verylongword", "b"]);
+        assert_eq!(
+            wrap(
+                "a
+
+b", false, 10.0, m
+            ),
+            ["a", "", "b"]
+        );
+        assert_eq!(wrap("a b", false, f32::NAN, m), ["a", "b"]);
     }
 }

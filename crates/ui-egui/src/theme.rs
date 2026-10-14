@@ -806,6 +806,8 @@ mod tests {
         let exempt = |c: char, file: &str| match file {
             "equation_tab.rs" => matches!(c, '≜' | '┬'),
             "ribbon.rs" => c == '➢',
+            // The Arabic comma appears in bidi probe tests, drawn with the Arabic face.
+            "bidi.rs" => c == '،',
             _ => false,
         };
         symbols.retain(|(c, file)| !exempt(*c, file));
