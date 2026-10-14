@@ -20,6 +20,7 @@ pub fn row<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
 }
 
 /// The start-to-end row layout: left to right, or right to left under RTL.
+/// Note: with_layout with Align::Center takes the full available height unless the caller caps it.
 pub fn row_layout(align: Align) -> Layout {
     if is_rtl() { Layout::right_to_left(align) } else { Layout::left_to_right(align) }
 }
@@ -52,12 +53,17 @@ pub fn rect(outer: Rect, r: Rect) -> Rect {
 /// One `Grid` row: cells in reading order (reversed under RTL), each aligned to its column's
 /// start edge, then `end_row`.
 pub fn grid_row<const N: usize>(ui: &mut Ui, cells: [&mut dyn FnMut(&mut Ui); N]) {
-    let mut cells: Vec<&mut dyn FnMut(&mut Ui)> = cells.into_iter().collect();
     if is_rtl() {
-        cells.reverse();
-    }
-    for cell in cells {
-        ui.with_layout(row_layout(Align::Center), |ui| cell(ui));
+        for cell in cells.into_iter().rev() {
+            // Height-capped like `row`, or the cell would take the grid's whole remaining height.
+            let size = vec2(ui.available_width(), ui.spacing().interact_size.y);
+            ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Center), |ui| cell(ui));
+        }
+    } else {
+        // English: exactly the plain `label; field; end_row()` it replaces.
+        for cell in cells {
+            cell(ui);
+        }
     }
     ui.end_row();
 }
@@ -185,5 +191,48 @@ mod tests {
             assert_eq!(end_align2(Align::Center), Align2::LEFT_CENTER);
             assert_eq!(menu_layout().cross_align, Align::Max);
         });
+    }
+
+    /// (label y, grid height) for a grid row built by `grid_row` or by plain cells.
+    fn grid_metrics(code: &str, helper: bool) -> (f32, f32) {
+        use std::{cell::Cell, rc::Rc};
+        let height = Rc::new(Cell::new(0.0_f32));
+        let h2 = height.clone();
+        let y = with_lang(code, || {
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(300.0, 400.0)).build_ui(move |ui| {
+                let r = egui::Grid::new("g").show(ui, |ui| {
+                    if helper {
+                        grid_row(
+                            ui,
+                            [
+                                &mut |ui| {
+                                    ui.label("L");
+                                },
+                                &mut |ui| {
+                                    ui.label("F");
+                                },
+                            ],
+                        );
+                    } else {
+                        ui.label("L");
+                        ui.label("F");
+                        ui.end_row();
+                    }
+                });
+                h2.set(r.response.rect.height());
+            });
+            h.run();
+            h.get_by_label("L").rect().center().y
+        });
+        (y, height.get())
+    }
+
+    #[test]
+    fn grid_row_keeps_english_rows_unchanged_and_rtl_rows_the_same_height() {
+        let plain = grid_metrics("en", false);
+        assert_eq!(grid_metrics("en", true), plain, "english: same y and grid height");
+        let (y, height) = grid_metrics("ar", true);
+        assert!((y - plain.0).abs() <= 1.0, "arabic y {y} vs english {}", plain.0);
+        assert!((height - plain.1).abs() <= 1.0, "arabic height {height} vs {}", plain.1);
     }
 }
