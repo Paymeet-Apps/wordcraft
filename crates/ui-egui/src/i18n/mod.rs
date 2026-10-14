@@ -486,6 +486,18 @@ pub fn lowercase(s: &str) -> String {
     out
 }
 
+/// The logical (reading-order) text of `s` when the interface is right to left and `s` is exactly
+/// a translation its catalog stores in draw order (what [`t`] returns). `None` for anything else:
+/// English and left-to-right languages, untranslated strings, and composed text (`fmt` results,
+/// strings joined in code). Draw order can't be undone in general, so this is the way back.
+pub fn logical(s: &str) -> Option<&'static str> {
+    let lang = current();
+    if !lang.is_rtl() {
+        return None;
+    }
+    lang.catalog().logical(s)
+}
+
 /// `s` in `lang`; strings without a translation come back unchanged.
 pub fn tr(lang: Lang, s: &str) -> &str {
     #[cfg(test)]

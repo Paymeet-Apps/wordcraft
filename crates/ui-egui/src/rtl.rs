@@ -207,8 +207,10 @@ pub fn sub_menu<'a, R>(ui: &mut Ui, atoms: impl IntoAtoms<'a>, add: impl FnOnce(
     rtl_sub_menu(ui, Button::new(atoms).left_text("⏴"), add)
 }
 
-/// egui's `SubMenuButton` + `SubMenu::show` (egui 0.36.2, MIT/Apache-2.0) with the sub-menu placed
-/// `LEFT_START` and laid out by [`menu_layout`]. egui hard-codes `RIGHT_START` there.
+/// egui's `SubMenuButton` + `SubMenu::show` with the sub-menu placed `LEFT_START` and laid out by
+/// [`menu_layout`]. egui hard-codes `RIGHT_START` there.
+///
+/// Ported from egui 0.36.2 (MIT OR Apache-2.0), Copyright (c) 2018-2021 Emil Ernerfeldt.
 fn rtl_sub_menu<R>(ui: &mut Ui, button: Button<'_>, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<Option<R>> {
     use egui::containers::menu::{MenuConfig, MenuState, SubMenu};
     let my_id = ui.next_auto_id();
@@ -349,10 +351,17 @@ impl HoverText for Response {
 /// A label that wraps at the available width. English: `ui.label(style(text))`.
 ///
 /// RTL: `text` is in draw order, as the catalog and `fmt` give it. Text that fits on one line is
-/// drawn as it is. Longer text is turned back into logical order (`bidi::visual` undoes itself for
-/// interface strings: run order reverses again), broken into rows by `bidi::wrap` and drawn one
-/// row under the other, right-aligned, so the first line of the sentence is on top. egui's own
-/// wrapping would cut the draw-order string and put the end of the sentence first.
+/// drawn as it is. Longer text is broken into rows by `bidi::wrap` from its logical order and
+/// drawn one row under the other, right-aligned, so the first line of the sentence is on top
+/// (egui's own wrapping would cut the draw-order string and put the end of the sentence first).
+///
+/// The logical text of a catalog translation comes from the catalog itself ([`i18n::logical`]).
+/// Draw order can't be undone in general, so composed text (a `fmt` result, a translation with a
+/// shortcut appended) falls back to `bidi::visual` run on the draw-order text: right for plain
+/// sentences, approximate when numbers, isolated values or left-to-right runs with trailing
+/// neutrals sit inside (`اختر 2 Columns` does not come back).
+///
+/// [`i18n::logical`]: crate::i18n::logical
 pub fn wrapped_label(ui: &mut Ui, text: &str, style: impl Fn(&str) -> RichText) -> Response {
     if !is_rtl() {
         return ui.label(style(text));
@@ -360,8 +369,12 @@ pub fn wrapped_label(ui: &mut Ui, text: &str, style: impl Fn(&str) -> RichText) 
     let width = ui.available_width();
     let measure =
         |s: &str| WidgetText::from(style(s)).into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::FontSelection::Default).size().x;
-    let rows =
-        if measure(text) <= width { vec![text.to_string()] } else { crate::bidi::wrap(&crate::bidi::visual(text, true), true, width, measure) };
+    let rows = if measure(text) <= width {
+        vec![text.to_string()]
+    } else {
+        let logical = crate::i18n::logical(text).map_or_else(|| crate::bidi::visual(text, true), std::borrow::Cow::Borrowed);
+        crate::bidi::wrap(&logical, true, width, measure)
+    };
     column(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
         for row in rows {
@@ -373,6 +386,9 @@ pub fn wrapped_label(ui: &mut Ui, text: &str, style: impl Fn(&str) -> RichText) 
 
 /// A check box that reads in the interface direction. English: exactly `ui.checkbox`. RTL: the box
 /// is right of its label (drawn as egui draws its own, mirrored). Dialogs use it too.
+///
+/// The RTL drawing is ported from egui 0.36.2's `Checkbox` (MIT OR Apache-2.0), Copyright (c)
+/// 2018-2021 Emil Ernerfeldt.
 pub fn checkbox<'a>(ui: &mut Ui, checked: &'a mut bool, atoms: impl IntoAtoms<'a>) -> Response {
     if !is_rtl() {
         return ui.checkbox(checked, atoms);

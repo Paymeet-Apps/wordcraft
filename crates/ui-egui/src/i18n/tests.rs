@@ -1218,12 +1218,71 @@ fn bundled_interface_fonts_cover_bulgarian_without_system_fallbacks() {
 static TEST_RTL: LangInfo = LangInfo {
     code: "xx-rtl",
     name: "RTL",
-    source: "\tSaved {path}\tتم الحفظ: {path}\n\tPage {page} of {pages}\tصفحة {page} من {pages}\n\tHome\tالرئيسية\n\tFont\tالخط\n\tUndo {action}\tتراجع: {action}\n\tSave PDF\tحفظ PDF\n",
+    source: "\tSaved {path}\tتم الحفظ: {path}\n\tPage {page} of {pages}\tصفحة {page} من {pages}\n\tHome\tالرئيسية\n\tFont\tالخط\n\tUndo {action}\tتراجع: {action}\n\tSave PDF\tحفظ PDF\n\tChoose 2 Columns\tاختر 2 Columns لتقسيم النص المحدد في المستند الحالي إلى عمودين متساويين في العرض مع مسافة صغيرة بينهما ثم اضغط موافق للمتابعة\n",
     prefer_hans: false,
     rtl: true,
     editing_lang: None,
     catalog: OnceLock::new(),
 };
+
+/// The logical text of [`TEST_RTL`]'s "Choose 2 Columns": a number and a Latin run inside, so its
+/// draw order does not convert back with `bidi::visual`.
+const CHOOSE_2_COLUMNS: &str =
+    "اختر 2 Columns لتقسيم النص المحدد في المستند الحالي إلى عمودين متساويين في العرض مع مسافة صغيرة بينهما ثم اضغط موافق للمتابعة";
+
+/// Ruling R16: a long translated tooltip wraps its logical text, which the catalog keeps.
+#[test]
+fn rtl_tooltips_wrap_the_logical_text_of_a_catalog_entry() {
+    set_current(Lang(&TEST_RTL));
+    let drawn = t("Choose 2 Columns").to_string();
+    assert_ne!(drawn, CHOOSE_2_COLUMNS, "stored in draw order");
+    assert_eq!(logical(&drawn), Some(CHOOSE_2_COLUMNS));
+    // `visual` maps it back to "اختر Columns 2 …", which draws the same on one line but wraps
+    // differently once a row ends between "2" and "Columns".
+    let back = crate::bidi::visual(&drawn, true).into_owned();
+    assert_ne!(back, CHOOSE_2_COLUMNS, "draw order does not undo itself here");
+    assert_eq!(logical("Choose 2 Columns"), None, "only stored translations");
+    assert_eq!(logical(&format!("{drawn} ")), None, "only exact translations");
+
+    let shown = drawn.clone();
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 500.0)).build_ui(move |ui| {
+        set_current(Lang(&TEST_RTL));
+        let r = ui.button("B");
+        crate::rtl::hover_text(r, shown.clone());
+    });
+    let font = egui::TextStyle::Body.resolve(&h.ctx.global_style());
+    let ctx = h.ctx.clone();
+    let measure = |s: &str| ctx.fonts_mut(|f| f.layout_no_wrap(s.to_string(), font.clone(), egui::Color32::WHITE).size().x);
+    // A tooltip just wide enough for "اختر 2": the first row ends after the number.
+    h.run();
+    let width = measure("اختر 2") + 1.0;
+    h.ctx.all_styles_mut(|s| {
+        s.interaction.tooltip_delay = 0.0;
+        s.interaction.show_tooltips_only_when_still = false;
+        s.spacing.tooltip_width = width;
+    });
+    h.run();
+    {
+        use egui_kittest::kittest::Queryable;
+        h.get_by_label("B").hover();
+    }
+    h.run_steps(4);
+    let rows = crate::bidi::wrap(CHOOSE_2_COLUMNS, true, width, measure);
+    assert_ne!(rows, crate::bidi::wrap(&back, true, width, measure), "the fallback would wrap differently");
+    assert!(rows.len() >= 2, "long enough to wrap: {rows:?}");
+    // Every row text drawn, top to bottom, is exactly the wrapped logical text (short rows such
+    // as "في" repeat, so match the whole sequence).
+    let mut unique = rows.clone();
+    unique.sort();
+    unique.dedup();
+    let mut drawn_rows: Vec<(f32, String)> =
+        unique.iter().flat_map(|row| crate::rtl::text_rects(h.output(), row).into_iter().map(move |r| (r.top(), row.clone()))).collect();
+    drawn_rows.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let drawn_rows: Vec<String> = drawn_rows.into_iter().map(|(_, s)| s).collect();
+    assert_eq!(drawn_rows, rows, "the tooltip's rows, first line on top");
+    set_current(Lang::EN);
+    assert_eq!(logical(&drawn), None, "left to right: no logical lookup");
+}
 
 #[test]
 fn rtl_catalog_entries_are_stored_in_visual_order() {

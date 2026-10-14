@@ -200,19 +200,17 @@ fn sep(ui: &mut egui::Ui, t: &Tokens) {
 
 /// Highlight colour grid, matching the ribbon's.
 fn highlight_menu(ui: &mut egui::Ui, app: &mut WordApp) {
-    egui::Grid::new("mini_hl").spacing(Vec2::new(3.0, 3.0)).show(ui, |ui| {
-        for (i, h) in wordcraft_doc::props::Highlight::ALL.iter().enumerate().skip(1) {
-            let Some(c) = h.rgb() else { continue };
-            let (r, resp) = ui.allocate_exact_size(Vec2::new(18.0, 18.0), Sense::click());
-            ui.painter().rect_filled(r, 2.0, egui::Color32::from_rgb(c.0, c.1, c.2));
-            if resp.rtl_hover_text(h.name()).clicked() {
-                app.canvas.last_highlight = h.ooxml().to_string();
-                let _ = app.run("format.highlight", json!({"color": h.ooxml()}));
-                ui.close();
-            }
-            if i % 5 == 0 {
-                ui.end_row();
-            }
+    // The first entry is "none" (No Color below). Right to left the rows run from the right.
+    let all = wordcraft_doc::props::Highlight::ALL;
+    crate::rtl::cell_grid(ui, "mini_hl", Some(Vec2::new(3.0, 3.0)), 5, all.len().saturating_sub(1), |ui, i| {
+        let Some(h) = all.get(i + 1) else { return };
+        let Some(c) = h.rgb() else { return };
+        let (r, resp) = ui.allocate_exact_size(Vec2::new(18.0, 18.0), Sense::click());
+        ui.painter().rect_filled(r, 2.0, egui::Color32::from_rgb(c.0, c.1, c.2));
+        if resp.rtl_hover_text(h.name()).clicked() {
+            app.canvas.last_highlight = h.ooxml().to_string();
+            let _ = app.run("format.highlight", json!({"color": h.ooxml()}));
+            ui.close();
         }
     });
     if ui.selectable_label(false, "No Color").clicked() {

@@ -2996,17 +2996,55 @@ mod tests {
         }
     }
 
-    fn every_menu_opens(code: &str) {
+    /// The mini toolbar's menus: drawn over a selection, below the ribbon.
+    const MINI_TOOLBAR: &str = "(mini toolbar)";
+
+    /// A window in `code` showing `tab`, with whatever selection makes it appear (a table, a
+    /// picture, an equation…; a text selection for the mini toolbar).
+    fn tab_harness(code: &str, tab: &str) -> AppHarness {
         let mut h = app_harness(2560.0, code);
+        let setup: &[(&str, Value)] = match tab {
+            "Table Design" | "Table Layout" => &[("insert.table", json!({"rows": 2, "cols": 2}))],
+            "Picture Format" => &[("insert.picture", json!({"data": png_data()}))],
+            "Shape Format" => &[("insert.shape", json!({"kind": "rectangle"}))],
+            "SmartArt Design" => &[("insert.smartArt", json!({"layout": "process"}))],
+            "Chart Design" => &[("insert.chart", json!({"type": "column"}))],
+            "Equation" => &[("insert.equation", json!({}))],
+            MINI_TOOLBAR => &[("select.text", json!({"text": "Studio"}))],
+            _ => &[],
+        };
+        for (cmd, params) in setup {
+            h.state_mut().run(cmd, params.clone()).unwrap_or_else(|e| panic!("{tab}: {cmd}: {e}"));
+        }
+        if tab != MINI_TOOLBAR {
+            h.state_mut().run("ui.tab", json!({"tab": tab})).unwrap();
+        }
+        h.run_steps(4);
+        h
+    }
+
+    fn every_menu_opens(code: &str) {
         let mut closed = Vec::new();
         let mut opened = 0;
-        for tab in TABS.iter().filter(|t| **t != "File") {
-            h.state_mut().run("ui.tab", json!({"tab": tab})).unwrap();
-            h.run_steps(3);
+        let contextual = ["Table Design", "Table Layout", "Picture Format", "Shape Format", "SmartArt Design", "Chart Design", "Equation"];
+        let tabs = TABS.iter().copied().filter(|t| *t != "File").chain(contextual).chain([MINI_TOOLBAR]);
+        for tab in tabs {
+            let mut h = tab_harness(code, tab);
+            if tab != MINI_TOOLBAR {
+                assert_eq!(h.state().ui.tab, tab, "{code}: the {tab} tab shows");
+            }
             crate::widgets::MENU_OPENERS.with(|m| m.borrow_mut().clear());
             h.run_steps(1);
             let openers = crate::widgets::MENU_OPENERS.with(|m| m.take());
-            for (name, r) in openers.into_iter().filter(|(_, r)| r.left() >= 0.0 && r.right() <= 2560.0) {
+            // The ribbon ends above y = 160; the mini toolbar floats over the document below it.
+            let here = |r: &Rect| if tab == MINI_TOOLBAR { r.top() > 160.0 } else { r.bottom() < 160.0 };
+            let openers: Vec<(String, Rect)> = openers.into_iter().filter(|(_, r)| r.left() >= 0.0 && r.right() <= 2560.0 && here(r)).collect();
+            assert!(!openers.is_empty() || !contextual.contains(&tab) && tab != MINI_TOOLBAR, "{code}: no menus found on {tab}");
+            for (name, r) in openers {
+                // Escape can end the selection a contextual tab depends on (an equation): start over.
+                if tab != MINI_TOOLBAR && h.state().ui.tab != tab || tab == MINI_TOOLBAR && h.state().session.sel.is_collapsed() {
+                    h = tab_harness(code, tab);
+                }
                 let p = r.center();
                 h.input_mut().events.push(egui::Event::PointerMoved(p));
                 h.input_mut().events.push(egui::Event::PointerButton {
@@ -3029,9 +3067,11 @@ mod tests {
                 }
                 h.key_press(egui::Key::Escape);
                 h.run_steps(2);
+                // Closed before the next one opens, so one stuck menu can't pass for the next.
+                assert!(!egui::Popup::is_any_open(&h.ctx), "{code}: {tab} › {name} stays open after Escape");
             }
         }
-        assert!(opened > 20, "{code}: only {opened} menus found");
+        assert!(opened > 40, "{code}: only {opened} menus found");
         assert!(closed.is_empty(), "{code}: menus that did not open: {closed:#?}");
     }
 
