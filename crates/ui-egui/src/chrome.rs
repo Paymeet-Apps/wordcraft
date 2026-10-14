@@ -4,6 +4,7 @@ use egui::{Align2, Rect, Sense, Stroke, Ui, pos2, vec2};
 use serde_json::json;
 use wordcraft_doc::StoryRef;
 
+use crate::rtl;
 use crate::theme::{Tokens, TypeRung, medium, paint_text, regular, semibold, text_width};
 use crate::{WordApp, icons};
 
@@ -197,6 +198,22 @@ const MAC_LIGHTS_LEFT: f32 = 10.0;
 /// from the top of the window.
 pub const MAC_CONTENT_LEFT: f32 = MAC_LIGHTS_LEFT + 2.0 * MAC_LIGHT_PITCH + MAC_LIGHT + (MAC_TITLE_BAR - MAC_LIGHT) / 2.0;
 
+/// `ui.horizontal_centered` that starts at the visual start edge (the right under RTL).
+///
+/// Mirroring decisions (L10N-AR.7). WordCraft draws no caption buttons of its own: on Windows and
+/// Linux the system frame draws minimise/maximise/close, and on macOS AppKit draws the traffic
+/// lights at the top left. No live Word observation was made (shared machine); the stated
+/// convention is used: mirrored Windows and Linux apps put the caption buttons on the left, and
+/// macOS keeps the traffic lights top left. So the title bar's left inset (the traffic lights'
+/// room on macOS) is an absolute margin that does not swap sides, while the controls inside it
+/// mirror: AutoSave and the Quick Access Toolbar start at the right, search and account sit at
+/// the left end. In the status bar the page and word counts start at the right and the view
+/// buttons and zoom control sit at the left.
+fn row_centered<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerResponse<R> {
+    let size = ui.available_size_before_wrap();
+    ui.allocate_ui_with_layout(size, rtl::row_layout(egui::Align::Center), add)
+}
+
 pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     // macOS: shorter, so the system's traffic lights are centred in it; the tallest controls
@@ -218,9 +235,9 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
                 let max = ui.ctx().input(|i| i.viewport().maximized.unwrap_or(false));
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(!max));
             }
-            let mut qat_end = full.min.x;
-            let mut right_start = full.max.x;
-            ui.horizontal_centered(|ui| {
+            let mut title_min = full.min.x;
+            let mut title_max = full.max.x;
+            row_centered(ui, |ui| {
                 ui.spacing_mut().item_spacing = vec2(2.0, 0.0);
                 // AutoSave switch: greyed out, with the reason as its tooltip, when AutoSave can't
                 // cover the document (#196, #176); clicking it then offers Save As where that helps.
@@ -236,7 +253,7 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
                 };
                 ui.painter().rect(r, 8.0, fill, Stroke::new(1.0, stroke), egui::StrokeKind::Inside);
                 let knob = if on { r.max.x - 8.0 } else { r.min.x + 8.0 };
-                ui.painter().circle_filled(pos2(knob, r.center().y), 5.0, knob_fill);
+                ui.painter().circle_filled(pos2(rtl::x(r, knob), r.center().y), 5.0, knob_fill);
                 let tip = block
                     .as_ref()
                     .map_or_else(|| tl!("AutoSave saves every change to the file (needs a saved document)").to_string(), |b| b.reason());
@@ -254,8 +271,9 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
                 }
                 ui.add_space(8.0);
                 quick_access(ui, app);
-                qat_end = ui.min_rect().max.x;
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // The toolbar's inner edge bounds the title on one side, the account cluster's on the other.
+                let qat_edge = if rtl::is_rtl() { ui.min_rect().min.x } else { ui.min_rect().max.x };
+                ui.with_layout(rtl::end_layout(egui::Align::Center), |ui| {
                     // Account / community.
                     let (r, resp) = ui.allocate_exact_size(vec2(control_h, control_h), Sense::click());
                     ui.painter().circle_filled(r.center(), control_h / 2.0 - 1.0, t.accent);
@@ -268,12 +286,18 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
                         ui.painter().rect_filled(r, 11.0, if resp.hovered() { t.accent_text } else { t.accent });
                         icons::paint(
                             ui.painter(),
-                            Rect::from_center_size(pos2(r.min.x + 13.0, r.center().y), vec2(14.0, 14.0)),
+                            Rect::from_center_size(pos2(rtl::x(r, r.min.x + 13.0), r.center().y), vec2(14.0, 14.0)),
                             "discord",
                             t.on_accent,
                             t.on_accent,
                         );
-                        ui.painter().text(pos2(r.min.x + 24.0, r.center().y), Align2::LEFT_CENTER, tl!("Discord"), medium(11.5), t.on_accent);
+                        ui.painter().text(
+                            pos2(rtl::x(r, r.min.x + 24.0), r.center().y),
+                            rtl::start_align2(egui::Align::Center),
+                            tl!("Discord"),
+                            medium(11.5),
+                            t.on_accent,
+                        );
                         if resp.on_hover_text(tl!("Join the ArtCraft community on Discord")).clicked() {
                             let _ = app.run("ui.discord", json!({}));
                         }
@@ -284,7 +308,7 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
                     ui.painter().rect(r, 6.0, if resp.hovered() { t.input } else { t.ribbon }, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
                     icons::paint(
                         ui.painter(),
-                        Rect::from_center_size(pos2(r.min.x + 16.0, r.center().y), vec2(16.0, 16.0)),
+                        Rect::from_center_size(pos2(rtl::x(r, r.min.x + 16.0), r.center().y), vec2(16.0, 16.0)),
                         "search",
                         t.text_dim,
                         t.accent,
@@ -294,8 +318,8 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
                     let ptrack = TypeRung::Control.tracking();
                     paint_text(
                         ui.painter(),
-                        pos2(r.min.x + 30.0, r.center().y - TypeRung::Control.line_height() / 2.0),
-                        Align2::LEFT_TOP,
+                        pos2(rtl::x(r, r.min.x + 30.0), r.center().y - TypeRung::Control.line_height() / 2.0),
+                        rtl::start_align2(egui::Align::Min),
                         ph,
                         &pfont,
                         ptrack,
@@ -311,7 +335,12 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
                     if resp.on_hover_text(tip).clicked() {
                         let _ = app.run("tools.search", json!({}));
                     }
-                    right_start = ui.min_rect().min.x;
+                    let end_edge = if rtl::is_rtl() { ui.min_rect().max.x } else { ui.min_rect().min.x };
+                    if rtl::is_rtl() {
+                        (title_min, title_max) = (end_edge, qat_edge);
+                    } else {
+                        (title_min, title_max) = (qat_edge, end_edge);
+                    }
                 });
             });
             // Centred title.
@@ -335,7 +364,7 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
             let track = TypeRung::Chrome.tracking();
             let w = text_width(ui.painter(), &title, &font, track, t.text);
             let cx = full.center().x;
-            if cx - w / 2.0 > qat_end + 10.0 && cx + w / 2.0 < right_start - 10.0 {
+            if cx - w / 2.0 > title_min + 10.0 && cx + w / 2.0 < title_max - 10.0 {
                 paint_text(
                     ui.painter(),
                     pos2(cx - w / 2.0, full.center().y - TypeRung::Chrome.line_height() / 2.0),
@@ -364,7 +393,7 @@ pub fn status_bar(app: &mut WordApp, ui: &mut Ui) {
             if !app.has_document() {
                 return;
             }
-            ui.horizontal_centered(|ui| {
+            row_centered(ui, |ui| {
                 ui.spacing_mut().item_spacing = vec2(14.0, 0.0);
                 let l = app.session.layout();
                 let page = l.caret_on(&app.session.sel.focus, app.session.page_hint).map(|c| c.page + 1).unwrap_or(1);
@@ -415,10 +444,11 @@ pub fn status_bar(app: &mut WordApp, ui: &mut Ui) {
                 {
                     let font = TypeRung::Caption.regular();
                     let track = TypeRung::Caption.tracking();
-                    paint_text(ui.painter(), pos2(ui.cursor().min.x, ui.cursor().min.y), Align2::LEFT_TOP, msg, &font, track, t.accent_text);
-                    ui.allocate_space(vec2(text_width(ui.painter(), msg, &font, track, t.accent_text) + 1.0, TypeRung::Caption.line_height()));
+                    let mw = text_width(ui.painter(), msg, &font, track, t.accent_text);
+                    let (r, _) = ui.allocate_exact_size(vec2(mw + 1.0, TypeRung::Caption.line_height()), Sense::hover());
+                    paint_text(ui.painter(), r.min, Align2::LEFT_TOP, msg, &font, track, t.accent_text);
                 }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.with_layout(rtl::end_layout(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
                     let reading = app.session.view.read_mode;
                     let z = (if reading { app.session.view.read_zoom } else { app.canvas.scale / crate::canvas::PX_PER_PT } * 100.0).round();
@@ -431,12 +461,30 @@ pub fn status_bar(app: &mut WordApp, ui: &mut Ui) {
                     if zresp.clicked() && !reading {
                         let _ = app.run("ui.dialog", json!({ "name": "zoom" }));
                     }
-                    if small_icon(ui, "plus", tl!("Zoom In")) {
-                        if reading {
-                            let _ = app.run("view.readTextSize", json!({"value": (z + 10.0).min(150.0)}));
-                        } else {
-                            let _ = app.run("view.zoomIn", json!({}));
+                    // The slider keeps its left-to-right value axis (egui can't mirror it), so under
+                    // RTL, where this cluster runs left to right, "-" comes first and "+" last.
+                    let zoom_in = |ui: &mut Ui, app: &mut WordApp| {
+                        if small_icon(ui, "plus", tl!("Zoom In")) {
+                            if reading {
+                                let _ = app.run("view.readTextSize", json!({"value": (z + 10.0).min(150.0)}));
+                            } else {
+                                let _ = app.run("view.zoomIn", json!({}));
+                            }
                         }
+                    };
+                    let zoom_out = |ui: &mut Ui, app: &mut WordApp| {
+                        if small_icon(ui, "minus", tl!("Zoom Out")) {
+                            if reading {
+                                let _ = app.run("view.readTextSize", json!({"value": (z - 10.0).max(75.0)}));
+                            } else {
+                                let _ = app.run("view.zoomOut", json!({}));
+                            }
+                        }
+                    };
+                    if rtl::is_rtl() {
+                        zoom_out(ui, app);
+                    } else {
+                        zoom_in(ui, app);
                     }
                     // Reading zoom changes only reading presentation, never the normal view zoom.
                     let mut v = if reading { app.session.view.read_zoom } else { app.canvas.scale / crate::canvas::PX_PER_PT };
@@ -446,12 +494,10 @@ pub fn status_bar(app: &mut WordApp, ui: &mut Ui) {
                         let command = if reading { "view.readTextSize" } else { "view.zoom" };
                         let _ = app.run(command, json!({"value": (v * 100.0).round()}));
                     }
-                    if small_icon(ui, "minus", tl!("Zoom Out")) {
-                        if reading {
-                            let _ = app.run("view.readTextSize", json!({"value": (z - 10.0).max(75.0)}));
-                        } else {
-                            let _ = app.run("view.zoomOut", json!({}));
-                        }
+                    if rtl::is_rtl() {
+                        zoom_in(ui, app);
+                    } else {
+                        zoom_out(ui, app);
                     }
                     ui.add_space(10.0);
                     let mode = app.session.view.mode;
@@ -480,13 +526,19 @@ pub fn status_bar(app: &mut WordApp, ui: &mut Ui) {
                     if resp.hovered() {
                         ui.painter().rect_filled(r, 3.0, t.hover);
                     }
-                    icons::paint(ui.painter(), Rect::from_min_size(r.min + vec2(2.0, 2.0), vec2(16.0, 16.0)), "focus", t.icon, t.accent);
+                    icons::paint(
+                        ui.painter(),
+                        rtl::rect(r, Rect::from_min_size(r.min + vec2(2.0, 2.0), vec2(16.0, 16.0))),
+                        "focus",
+                        t.icon,
+                        t.accent,
+                    );
                     let ffont = TypeRung::Caption.regular();
                     let ftrack = TypeRung::Caption.tracking();
                     paint_text(
                         ui.painter(),
-                        pos2(r.min.x + 22.0, r.center().y - TypeRung::Caption.line_height() / 2.0),
-                        Align2::LEFT_TOP,
+                        pos2(rtl::x(r, r.min.x + 22.0), r.center().y - TypeRung::Caption.line_height() / 2.0),
+                        rtl::start_align2(egui::Align::Min),
                         focus,
                         &ffont,
                         ftrack,
@@ -591,5 +643,74 @@ mod tests {
         assert_eq!(MAC_CONTENT_LEFT - lights_end, margin);
         // `egui::Margin` is in `i8`.
         assert!(MAC_CONTENT_LEFT <= f32::from(i8::MAX));
+    }
+
+    /// Run `f` with the interface language set, restoring English afterwards.
+    fn with_lang<T>(code: &str, f: impl FnOnce() -> T) -> T {
+        crate::i18n::set_current(crate::i18n::Lang::from_code(code).unwrap_or(crate::i18n::Lang::EN));
+        let out = f();
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        out
+    }
+
+    fn new_app() -> WordApp {
+        WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::new()), crate::Services::default())
+    }
+
+    /// Rects of the keytip-badged title-bar controls: "1" = Save, "2" = Undo, and the search box.
+    fn title_rects(code: &str, mac: bool) -> std::collections::HashMap<String, egui::Rect> {
+        with_lang(code, || {
+            let mut a = new_app();
+            a.integrated_titlebar = mac;
+            a.ui.keytips = crate::keytips::Phase::Tabs;
+            let (ctx, mut n) = (ctx(), 0);
+            frame(&ctx, &mut n, vec![], &mut a);
+            a.keytip_rects.clear();
+            frame(&ctx, &mut n, vec![], &mut a);
+            a.keytip_rects.iter().map(|(r, l)| (l.clone(), *r)).collect()
+        })
+    }
+
+    #[test]
+    fn qat_starts_at_the_right_in_arabic() {
+        let en = title_rects("en", false);
+        assert!(en["1"].center().x < en["2"].center().x, "english: Save is left of Undo");
+        let ar = title_rects("ar", false);
+        assert!(ar["1"].center().x > ar["2"].center().x, "arabic: Save ({:?}) is right of Undo ({:?})", ar["1"], ar["2"]);
+        assert!(ar["1"].center().x > 400.0, "the toolbar starts at the right edge");
+    }
+
+    /// WordCraft draws no min/max/close buttons of its own: on Windows and Linux the system frame
+    /// does, and on macOS AppKit draws the traffic lights at the top left. Mirroring must leave
+    /// that corner alone: content keeps clear of the lights, and the controls swap sides around it.
+    #[test]
+    fn caption_buttons_follow_the_platform_convention_in_arabic() {
+        let ar = title_rects("ar", true);
+        let clear = ar.values().map(|r| r.min.x).fold(f32::INFINITY, f32::min);
+        assert!(clear >= MAC_CONTENT_LEFT, "arabic: the leftmost control ({clear}) clears the traffic lights ({MAC_CONTENT_LEFT})");
+        assert!(ar["Q"].center().x < ar["1"].center().x, "arabic: the search box moves to the left end");
+        let en = title_rects("en", true);
+        assert!(en["Q"].center().x > en["1"].center().x, "english: the search box is at the right end");
+    }
+
+    fn status_positions(code: &str) -> (f32, f32) {
+        with_lang(code, || {
+            let mut h = egui_kittest::Harness::builder()
+                .with_size(egui::vec2(1000.0, 200.0))
+                .build_ui_state(|ui, a: &mut WordApp| status_bar(a, ui), new_app());
+            h.run();
+            let page = crate::i18n::fmt(tl!("Page {page} of {pages}"), &[("page", "1"), ("pages", "1")]);
+            let page_x = egui_kittest::kittest::Queryable::get_by_label(&h, &page).rect().center().x;
+            let slider_x = egui_kittest::kittest::Queryable::get_by_role(&h, egui::accesskit::Role::Slider).rect().center().x;
+            (page_x, slider_x)
+        })
+    }
+
+    #[test]
+    fn status_bar_starts_at_the_right_in_arabic() {
+        let (page, slider) = status_positions("en");
+        assert!(page < slider, "english: page count ({page}) is left of the zoom slider ({slider})");
+        let (page, slider) = status_positions("ar");
+        assert!(page > slider, "arabic: page count ({page}) is right of the zoom slider ({slider})");
     }
 }
