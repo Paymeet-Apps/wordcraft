@@ -7,93 +7,91 @@ use serde_json::{Value, json};
 use wordcraft_doc::{Pos, StoryRef};
 
 use crate::WordApp;
+use crate::rtl::HoverText as _;
 use crate::theme::{Tokens, regular, semibold};
 
-pub fn show(app: &mut WordApp, ui: &mut Ui) {
+/// The window edge a pane docks at in English. Under RTL every pane docks at the opposite edge,
+/// as Word mirrors its task panes with the interface.
+#[derive(Clone, Copy)]
+enum Dock {
+    Start,
+    End,
+}
+
+/// Show a resizable pane docked at `dock`'s edge, its contents in reading order, and keep its
+/// screen rect in egui memory ([`pane_rect_id`]).
+fn dock(ui: &mut Ui, id: &'static str, dock: Dock, width: f32, add: impl FnOnce(&mut Ui)) {
     let t = Tokens::get(ui.ctx());
+    let left = matches!(dock, Dock::Start) != crate::rtl::is_rtl();
+    let panel = if left { egui::Panel::left(id) } else { egui::Panel::right(id) };
+    let r = panel
+        .default_size(width)
+        .resizable(true)
+        .frame(egui::Frame::NONE.fill(t.panel).inner_margin(10).stroke(Stroke::new(1.0, t.border)))
+        .show(ui, |ui| {
+            if crate::rtl::is_rtl() {
+                // Rows, labels and buttons line up on the right.
+                crate::rtl::column(ui, add);
+            } else {
+                add(ui);
+            }
+        });
+    ui.ctx().data_mut(|d| d.insert_temp(pane_rect_id(id), r.response.rect));
+}
+
+pub fn show(app: &mut WordApp, ui: &mut Ui) {
     // SmartArt Design › Text Pane, while a SmartArt graphic WordCraft can edit is selected.
     if app.session.view.smart_art_pane && wordcraft_engine::cmd::smart_art::selected_smart_art(&app.session).is_some() {
-        egui::Panel::left("smart_art_pane")
-            .default_size(250.0)
-            .resizable(true)
-            .frame(egui::Frame::NONE.fill(t.panel).inner_margin(10).stroke(Stroke::new(1.0, t.border)))
-            .show(ui, |ui| {
-                if header(ui, "Text Pane") {
-                    let _ = app.run("smartArt.textPane", json!({"value": false}));
-                    return;
-                }
-                crate::dialogs_smart_art::text_pane(app, ui);
-            });
+        dock(ui, "smart_art_pane", Dock::Start, 250.0, |ui| {
+            if header(ui, "Text Pane") {
+                let _ = app.run("smartArt.textPane", json!({"value": false}));
+                return;
+            }
+            crate::dialogs_smart_art::text_pane(app, ui);
+        });
     }
     if app.session.view.nav_pane {
-        egui::Panel::left("nav_pane")
-            .default_size(260.0)
-            .resizable(true)
-            .frame(egui::Frame::NONE.fill(t.panel).inner_margin(10).stroke(Stroke::new(1.0, t.border)))
-            .show(ui, |ui| nav(app, ui));
+        dock(ui, "nav_pane", Dock::Start, 260.0, |ui| nav(app, ui));
     }
     if app.session.view.clipboard_pane {
-        egui::Panel::left("clipboard_pane")
-            .default_size(250.0)
-            .resizable(true)
-            .frame(egui::Frame::NONE.fill(t.panel).inner_margin(10).stroke(Stroke::new(1.0, t.border)))
-            .show(ui, |ui| clipboard(app, ui));
+        dock(ui, "clipboard_pane", Dock::Start, 250.0, |ui| clipboard(app, ui));
     }
     if app.session.view.styles_pane {
-        egui::Panel::right("styles_pane")
-            .default_size(250.0)
-            .resizable(true)
-            .frame(egui::Frame::NONE.fill(t.panel).inner_margin(10).stroke(Stroke::new(1.0, t.border)))
-            .show(ui, |ui| styles(app, ui));
+        dock(ui, "styles_pane", Dock::End, 250.0, |ui| styles(app, ui));
     }
     if app.session.view.style_inspector {
-        egui::Panel::right("style_inspector")
-            .default_size(240.0)
-            .resizable(true)
-            .frame(egui::Frame::NONE.fill(t.panel).inner_margin(10).stroke(Stroke::new(1.0, t.border)))
-            .show(ui, |ui| inspector(app, ui));
+        dock(ui, "style_inspector", Dock::End, 240.0, |ui| inspector(app, ui));
     }
     if app.session.view.accessibility_pane {
-        egui::Panel::right("accessibility_pane")
-            .default_size(280.0)
-            .resizable(true)
-            .frame(egui::Frame::NONE.fill(t.panel).inner_margin(10).stroke(Stroke::new(1.0, t.border)))
-            .show(ui, |ui| crate::a11y_pane::accessibility(app, ui));
+        dock(ui, "accessibility_pane", Dock::End, 280.0, |ui| crate::a11y_pane::accessibility(app, ui));
     }
     if app.session.view.alt_text_pane {
-        egui::Panel::right("alt_text_pane")
-            .default_size(260.0)
-            .resizable(true)
-            .frame(egui::Frame::NONE.fill(t.panel).inner_margin(10).stroke(Stroke::new(1.0, t.border)))
-            .show(ui, |ui| crate::a11y_pane::alt_text(app, ui));
+        dock(ui, "alt_text_pane", Dock::End, 260.0, |ui| crate::a11y_pane::alt_text(app, ui));
     }
     if app.restrict.open {
-        egui::Panel::right("restrict_pane")
-            .default_size(270.0)
-            .resizable(true)
-            .frame(egui::Frame::NONE.fill(t.panel).inner_margin(10).stroke(Stroke::new(1.0, t.border)))
-            .show(ui, |ui| {
-                if header(ui, "Restrict Editing") {
-                    app.restrict.open = false;
-                    return;
-                }
-                crate::dialogs_review::restrict_pane(app, ui);
-            });
+        dock(ui, "restrict_pane", Dock::End, 270.0, |ui| {
+            if header(ui, "Restrict Editing") {
+                app.restrict.open = false;
+                return;
+            }
+            crate::dialogs_review::restrict_pane(app, ui);
+        });
     }
     if app.session.view.comments_pane {
-        egui::Panel::right("comments_pane")
-            .default_size(290.0)
-            .resizable(true)
-            .frame(egui::Frame::NONE.fill(t.panel).inner_margin(10).stroke(Stroke::new(1.0, t.border)))
-            .show(ui, |ui| comments(app, ui));
+        dock(ui, "comments_pane", Dock::End, 290.0, |ui| comments(app, ui));
     }
+}
+
+/// Where a pane's screen rect is kept in egui memory (for tests and the control channel).
+pub(crate) fn pane_rect_id(id: &str) -> egui::Id {
+    egui::Id::new(("pane_rect", id))
 }
 
 pub(crate) fn header(ui: &mut Ui, title: &str) -> bool {
     let mut close = false;
-    ui.horizontal(|ui| {
+    crate::rtl::row(ui, |ui| {
         ui.label(egui::RichText::new(tl!(title)).font(semibold(15.0)));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        ui.with_layout(crate::rtl::end_layout(egui::Align::Center), |ui| {
             // Drawn, not the "✕" character: the interface fonts have no glyph for it.
             if crate::widgets::icon_button(ui, "close", tl!("Close")).clicked() {
                 close = true;
@@ -135,7 +133,7 @@ fn nav(app: &mut WordApp, ui: &mut Ui) {
         }
     }
     ui.add_space(4.0);
-    ui.horizontal(|ui| {
+    crate::rtl::row(ui, |ui| {
         for (k, l) in [("headings", "Headings"), ("pages", "Pages"), ("results", "Results")] {
             if ui.selectable_label(app.ui.nav_tab == k, tl!(l)).clicked() {
                 app.ui.nav_tab = k.into();
@@ -196,7 +194,7 @@ fn nav(app: &mut WordApp, ui: &mut Ui) {
                 }
             }
             if items.is_empty() {
-                ui.label(egui::RichText::new(tl!("Create an interactive outline of your document.\n\nIt's a great way to keep track of where you are or quickly move your content around.\n\nTo get started, go to the Home tab and apply Heading styles to the headings in your document.")).weak());
+                crate::rtl::wrapped_label(ui, tl!("Create an interactive outline of your document.\n\nIt's a great way to keep track of where you are or quickly move your content around.\n\nTo get started, go to the Home tab and apply Heading styles to the headings in your document."), |s| egui::RichText::new(s).weak());
             }
             for (i, (path, lv, txt)) in items.into_iter().enumerate() {
                 if nav_heading(ui, lv, &txt, current == Some(i)).clicked() {
@@ -215,7 +213,7 @@ fn nav(app: &mut WordApp, ui: &mut Ui) {
 /// Constrain each heading to the available pane width so long document text cannot
 /// enlarge the panel. The full heading stays accessible on hover.
 fn nav_heading(ui: &mut Ui, level: u8, text: &str, selected: bool) -> egui::Response {
-    ui.horizontal(|ui| {
+    crate::rtl::row(ui, |ui| {
         ui.add_space(level as f32 * 14.0);
         ui.add_sized(
             vec2(ui.available_width(), ui.spacing().interact_size.y),
@@ -233,7 +231,7 @@ fn clipboard(app: &mut WordApp, ui: &mut Ui) {
         return;
     }
     let items: Vec<String> = app.session.clip_history.items().iter().map(|i| i.preview()).collect();
-    ui.horizontal(|ui| {
+    crate::rtl::row(ui, |ui| {
         if ui.add_enabled(!items.is_empty(), egui::Button::new(tl!("Paste All"))).clicked() {
             let _ = app.run("edit.pasteAllClipboard", json!({}));
             app.canvas.want_focus = true;
@@ -244,7 +242,7 @@ fn clipboard(app: &mut WordApp, ui: &mut Ui) {
     });
     ui.add_space(4.0);
     let hint = if items.is_empty() { "Nothing collected yet. Items you copy or cut appear here." } else { "Click an item to paste it." };
-    ui.label(egui::RichText::new(tl!(hint)).small().weak());
+    crate::rtl::wrapped_label(ui, tl!(hint), |s| egui::RichText::new(s).small().weak());
     ui.separator();
     let t = Tokens::get(ui.ctx());
     egui::ScrollArea::vertical().show(ui, |ui| {
@@ -256,11 +254,11 @@ fn clipboard(app: &mut WordApp, ui: &mut Ui) {
                     egui::text::LayoutJob::single_section(text, egui::TextFormat { font_id: regular(12.5), color: t.text, ..Default::default() });
                 job.wrap.max_width = ui.available_width();
                 job.wrap.max_rows = 3;
-                if ui.add(egui::Button::new(job).frame(false)).on_hover_text(tl!("Paste")).clicked() {
+                if ui.add(egui::Button::new(job).frame(false)).rtl_hover_text(tl!("Paste")).clicked() {
                     let _ = app.run("edit.pasteClipboardItem", json!({"index": i}));
                     app.canvas.want_focus = true;
                 }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                ui.with_layout(crate::rtl::end_layout(egui::Align::Min), |ui| {
                     if ui.small_button(tl!("Delete")).clicked() {
                         let _ = app.run("edit.deleteClipboardItem", json!({"index": i}));
                     }
@@ -291,7 +289,7 @@ fn styles(app: &mut WordApp, ui: &mut Ui) {
         _ => crate::i18n::isolate(&current_name),
     };
     ui.label(egui::RichText::new(crate::i18n::fmt_translated(tl!("Current style: {style}"), &[("style", &current_name)])).small());
-    ui.horizontal(|ui| {
+    crate::rtl::row(ui, |ui| {
         if ui.button(tl!("New Style…")).clicked() {
             app.dialog = crate::dialogs::Dialog::open("newStyle", app);
         }
@@ -321,9 +319,9 @@ fn styles(app: &mut WordApp, ui: &mut Ui) {
     list.sort_by_key(|s| s.1.to_lowercase());
     egui::ScrollArea::vertical().show(ui, |ui| {
         for (id, name, is_char) in list {
-            ui.horizontal(|ui| {
+            crate::rtl::row(ui, |ui| {
                 let r = ui.selectable_label(id == cur, &name);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.with_layout(crate::rtl::end_layout(egui::Align::Center), |ui| {
                     ui.label(egui::RichText::new(if is_char { "a" } else { "¶" }).weak());
                 });
                 if r.clicked() {
@@ -369,7 +367,7 @@ fn comments(app: &mut WordApp, ui: &mut Ui) {
                 if reply {
                     ui.add_space(0.0);
                 }
-                ui.horizontal(|ui| {
+                crate::rtl::row(ui, |ui| {
                     ui.label(egui::RichText::new(c.get("author").and_then(Value::as_str).unwrap_or("")).font(semibold(12.0)));
                     ui.label(egui::RichText::new(comment_stamp(c.get("date").and_then(Value::as_str).unwrap_or(""))).small().weak());
                     if c.get("resolved").and_then(Value::as_bool).unwrap_or(false) {
@@ -380,7 +378,7 @@ fn comments(app: &mut WordApp, ui: &mut Ui) {
                 comment_editor(app, ui, id as u32, None, false);
                 let open_key = egui::Id::new(("comment_reply_open", id));
                 let mut replying = ui.data(|d| d.get_temp::<bool>(open_key)).unwrap_or(false);
-                ui.horizontal(|ui| {
+                crate::rtl::row(ui, |ui| {
                     if ui.small_button(tl!("Go to")).clicked()
                         && let Some(a) = c.get("anchor").filter(|a| !a.is_null())
                     {
@@ -541,8 +539,8 @@ fn inspector(app: &mut WordApp, ui: &mut Ui) {
             }
         });
         ui.add_space(10.0);
-        ui.horizontal(|ui| {
-            if ui.button(tl!("Clear All")).on_hover_text(tl!("Clear All Formatting")).clicked() {
+        crate::rtl::row(ui, |ui| {
+            if ui.button(tl!("Clear All")).rtl_hover_text(tl!("Clear All Formatting")).clicked() {
                 let _ = app.run("format.clear", json!({}));
                 app.canvas.want_focus = true;
             }
@@ -572,14 +570,14 @@ fn section(ui: &mut Ui, t: &Tokens, title: &str, body: impl FnOnce(&mut Ui)) {
 fn level_row(ui: &mut Ui, t: &Tokens, caption: &str, value: &str, dim: bool, tip: &str, disabled: bool) -> bool {
     ui.label(egui::RichText::new(tl!(caption)).font(regular(11.0)).color(t.text_dim));
     let mut clicked = false;
-    ui.horizontal(|ui| {
+    crate::rtl::row(ui, |ui| {
         let w = (ui.available_width() - 26.0).max(40.0);
         ui.allocate_ui(vec2(w, 18.0), |ui| {
             ui.set_width(w);
             let text = egui::RichText::new(value).font(regular(12.5)).color(if dim { t.text_disabled } else { t.text });
             ui.add(egui::Label::new(text).wrap());
         });
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+        ui.with_layout(crate::rtl::end_layout(egui::Align::Min), |ui| {
             let (r, resp) = ui.allocate_exact_size(vec2(22.0, 20.0), egui::Sense::click());
             let enabled = !disabled;
             if enabled && resp.hovered() {
@@ -593,7 +591,7 @@ fn level_row(ui: &mut Ui, t: &Tokens, caption: &str, value: &str, dim: bool, tip
                 c,
                 if enabled { t.accent } else { c },
             );
-            let resp = resp.on_hover_text(tl!(tip));
+            let resp = resp.rtl_hover_text(tl!(tip));
             clicked = enabled && resp.clicked();
         });
     });
@@ -739,6 +737,96 @@ mod tests {
         assert_eq!(comment_stamp("2026-10-12T04:44:31Z"), "2026-10-12 04:44");
         assert_eq!(comment_stamp("2026-10-12"), "2026-10-12");
         assert_eq!(comment_stamp(""), "");
+    }
+}
+
+#[cfg(test)]
+mod rtl_tests {
+    use egui_kittest::kittest::Queryable as _;
+    use serde_json::json;
+
+    use crate::{Services, WordApp};
+
+    /// The sample document with `panes` turned on, in `lang`, after a few frames: each pane's
+    /// header label rect (found by its translated title) and the canvas rect.
+    fn pane_rects(lang: &str, panes: &[(&str, &str)]) -> (Vec<egui::Rect>, egui::Rect) {
+        let mut a = WordApp::new(wordcraft_engine::Session::new(wordcraft_engine::sample::sample_document()), Services::default());
+        a.run("ui.language", json!({"value": lang})).unwrap();
+        for (cmd, _) in panes {
+            a.run(cmd, json!({"value": true})).unwrap();
+        }
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(
+            |ui, app: &mut WordApp| {
+                let ctx = ui.ctx().clone();
+                app.logic(&ctx);
+                app.ui(ui);
+            },
+            a,
+        );
+        h.run_steps(5);
+        let canvas = h.state().canvas.canvas_rect.unwrap();
+        let l = crate::i18n::Lang::from_code(lang).unwrap();
+        // The pane's header is the lowest node with its title (the ribbon may use the same word).
+        let rects = panes
+            .iter()
+            .map(|(_, title)| {
+                let label = crate::i18n::tr(l, title);
+                h.query_all_by_label(label).map(|n| n.rect()).max_by(|a, b| a.min.y.total_cmp(&b.min.y)).unwrap()
+            })
+            .collect();
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        (rects, canvas)
+    }
+
+    /// Word mirrors its task panes with the interface: the panes that dock at the right in English
+    /// (Styles, Accessibility, Comments) dock at the left in Arabic.
+    #[test]
+    fn task_panes_dock_on_the_left_in_arabic() {
+        for pane in [("view.stylesPane", "Styles"), ("view.accessibilityPane", "Accessibility"), ("view.commentsPane", "Comments")] {
+            let (en, canvas) = pane_rects("en", &[pane]);
+            assert!(en[0].left() > canvas.right() - 1.0, "english: {} ({:?}) is right of the canvas ({canvas:?})", pane.1, en[0]);
+            let (ar, canvas) = pane_rects("ar", &[pane]);
+            assert!(ar[0].right() < canvas.left() + 1.0, "arabic: {} ({:?}) is left of the canvas ({canvas:?})", pane.1, ar[0]);
+        }
+    }
+
+    /// The Navigation pane docks at the left in English, so it moves to the right in Arabic (the
+    /// mirror of Word's layout, as Arabic Word has it).
+    #[test]
+    fn navigation_pane_docks_on_the_right_in_arabic() {
+        let nav = ("view.navigationPane", "Navigation");
+        let (en, canvas) = pane_rects("en", &[nav]);
+        assert!(en[0].right() < canvas.left() + 1.0, "english: Navigation ({:?}) is left of the canvas ({canvas:?})", en[0]);
+        let (ar, canvas) = pane_rects("ar", &[nav]);
+        assert!(ar[0].left() > canvas.right() - 1.0, "arabic: Navigation ({:?}) is right of the canvas ({canvas:?})", ar[0]);
+    }
+
+    /// A pane's header reads from the right in Arabic: its title sits at the pane's right edge.
+    #[test]
+    fn pane_header_title_starts_at_the_right_in_arabic() {
+        for lang in ["en", "ar"] {
+            let mut a = WordApp::new(wordcraft_engine::Session::new(wordcraft_engine::sample::sample_document()), Services::default());
+            a.run("ui.language", json!({"value": lang})).unwrap();
+            a.run("view.stylesPane", json!({"value": true})).unwrap();
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(
+                |ui, app: &mut WordApp| {
+                    let ctx = ui.ctx().clone();
+                    app.logic(&ctx);
+                    app.ui(ui);
+                },
+                a,
+            );
+            h.run_steps(5);
+            let pane = h.ctx.data(|d| d.get_temp::<egui::Rect>(super::pane_rect_id("styles_pane"))).unwrap();
+            let label = crate::i18n::tr(crate::i18n::Lang::from_code(lang).unwrap(), "Styles");
+            let title = h.query_all_by_label(label).map(|n| n.rect()).max_by(|a, b| a.min.y.total_cmp(&b.min.y)).unwrap();
+            crate::i18n::set_current(crate::i18n::Lang::EN);
+            if lang == "ar" {
+                assert!(pane.right() - title.right() < 20.0, "arabic: the title ({title:?}) starts at the pane's right edge ({pane:?})");
+            } else {
+                assert!(title.left() - pane.left() < 20.0, "english: the title ({title:?}) starts at the pane's left edge ({pane:?})");
+            }
+        }
     }
 }
 

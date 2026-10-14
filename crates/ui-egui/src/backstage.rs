@@ -1,10 +1,11 @@
 //! File tab (Backstage): Home/New, Open, Info, Save As, Print, Export, Close, Options, About.
 
-use egui::{Align2, Rect, Sense, Stroke, Ui, pos2, vec2};
+use egui::{Align, Rect, Sense, Stroke, Ui, pos2, vec2};
 use serde_json::json;
 
+use crate::rtl::HoverText as _;
 use crate::theme::{APP_COLOR, Tokens, medium, regular, semibold};
-use crate::{WordApp, icons};
+use crate::{WordApp, icons, rtl};
 
 const PAGES: [(&str, &str); 10] = [
     ("home", "Home"),
@@ -27,8 +28,11 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
         app.ui.backstage_page = "home".into();
     }
     let mac = app.integrated_titlebar;
-    egui::Panel::left("backstage_nav")
-        .exact_size(200.0)
+    // The navigation column is at the window's start edge: the right under RTL.
+    let nav = if rtl::is_rtl() { egui::Panel::right("backstage_nav") } else { egui::Panel::left("backstage_nav") };
+    // The back arrow points towards the start edge.
+    let back_icon = if rtl::is_rtl() { "chevronRight" } else { "chevronLeft" };
+    nav.exact_size(200.0)
         // Fixed width, as in Word: without this egui shows a resize handle that does nothing (#502).
         .resizable(false)
         .frame(egui::Frame::NONE.fill(APP_COLOR).inner_margin(egui::Margin { left: 0, right: 0, top: if mac { 0 } else { 12 }, bottom: 12 }))
@@ -42,16 +46,18 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
                 }
                 // The chevron's stroke starts at the content edge.
-                let c = pos2(band.min.x + crate::chrome::MAC_CONTENT_LEFT + 3.0, band.center().y);
+                // RTL: the column is at the right, away from the lights; the arrow keeps the same
+                // distance from the column's right edge.
+                let c = pos2(rtl::x(band, band.min.x + crate::chrome::MAC_CONTENT_LEFT + 3.0), band.center().y);
                 let resp = ui.interact(Rect::from_center_size(c, vec2(22.0, band.height())), ui.id().with("backstage_back"), Sense::click());
-                icons::paint(ui.painter(), Rect::from_center_size(c, vec2(18.0, 18.0)), "chevronLeft", egui::Color32::WHITE, egui::Color32::WHITE);
+                icons::paint(ui.painter(), Rect::from_center_size(c, vec2(18.0, 18.0)), back_icon, egui::Color32::WHITE, egui::Color32::WHITE);
                 resp
             } else {
                 let (r, resp) = ui.allocate_exact_size(vec2(200.0, 40.0), Sense::click());
                 icons::paint(
                     ui.painter(),
-                    Rect::from_center_size(pos2(r.min.x + 26.0, r.center().y), vec2(18.0, 18.0)),
-                    "chevronLeft",
+                    Rect::from_center_size(pos2(rtl::x(r, r.min.x + 26.0), r.center().y), vec2(18.0, 18.0)),
+                    back_icon,
                     egui::Color32::WHITE,
                     egui::Color32::WHITE,
                 );
@@ -75,8 +81,8 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                     ui.painter().rect_filled(r, 0.0, egui::Color32::from_white_alpha(26));
                 }
                 ui.painter().text(
-                    pos2(r.min.x + 22.0, r.center().y),
-                    Align2::LEFT_CENTER,
+                    pos2(rtl::x(r, r.min.x + 22.0), r.center().y),
+                    rtl::start_align2(Align::Center),
                     tl!(label),
                     if active { semibold(14.0) } else { medium(14.0) },
                     if on { egui::Color32::WHITE } else { egui::Color32::from_white_alpha(110) },
@@ -117,7 +123,13 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                     if resp.hovered() {
                         ui.painter().rect_filled(r, 0.0, egui::Color32::from_white_alpha(26));
                     }
-                    ui.painter().text(pos2(r.min.x + 22.0, r.center().y), Align2::LEFT_CENTER, tl!(label), regular(13.0), egui::Color32::WHITE);
+                    ui.painter().text(
+                        pos2(rtl::x(r, r.min.x + 22.0), r.center().y),
+                        rtl::start_align2(Align::Center),
+                        tl!(label),
+                        regular(13.0),
+                        egui::Color32::WHITE,
+                    );
                     if resp.clicked() {
                         if id == "discord" {
                             let _ = app.run("ui.discord", json!({}));
@@ -129,15 +141,24 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
             });
         });
     egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.ribbon).inner_margin(egui::Margin::symmetric(40, 30))).show(ui, |ui| {
-        egui::ScrollArea::vertical().show(ui, |ui| match app.ui.backstage_page.as_str() {
-            "home" => home_page(app, ui),
-            "new" => new_page(app, ui),
-            "open" => open_page(app, ui),
-            "saveAs" => save_as_page(app, ui),
-            "info" => info_page(app, ui),
-            "print" | "export" => export_page(app, ui),
-            "options" => crate::options::page(app, ui),
-            _ => home_page(app, ui),
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            let page = |app: &mut WordApp, ui: &mut Ui| match app.ui.backstage_page.as_str() {
+                "home" => home_page(app, ui),
+                "new" => new_page(app, ui),
+                "open" => open_page(app, ui),
+                "saveAs" => save_as_page(app, ui),
+                "info" => info_page(app, ui),
+                "print" | "export" => export_page(app, ui),
+                "options" => crate::options::page(app, ui),
+                _ => home_page(app, ui),
+            };
+            if rtl::is_rtl() {
+                // Headings, lists and buttons start at the right.
+                ui.set_width(ui.available_width());
+                rtl::column(ui, |ui| page(app, ui));
+            } else {
+                page(app, ui);
+            }
         });
     });
 }
@@ -154,7 +175,7 @@ fn heading(ui: &mut Ui, s: &str) {
 
 fn template_tile(ui: &mut Ui, app: &mut WordApp, label: &str, template: &str) {
     let t = Tokens::get(ui.ctx());
-    ui.vertical(|ui| {
+    rtl::column(ui, |ui| {
         // The label sits right under the thumbnail whatever row gap the gallery uses.
         ui.spacing_mut().item_spacing.y = 0.0;
         let (r, resp) = ui.allocate_exact_size(vec2(150.0, 194.0), Sense::click());
@@ -229,7 +250,7 @@ fn home_page(app: &mut WordApp, ui: &mut Ui) {
             "Good evening"
         },
     );
-    ui.horizontal(|ui| {
+    rtl::row(ui, |ui| {
         ui.spacing_mut().item_spacing = vec2(18.0, 0.0);
         for (label, template) in TEMPLATES.into_iter().take(HOME_TEMPLATES) {
             template_tile(ui, app, label, template);
@@ -260,12 +281,18 @@ fn new_page(app: &mut WordApp, ui: &mut Ui) {
         ui.label(egui::RichText::new(tl!("No templates match your search.")).color(t.text_dim));
         return;
     }
-    ui.horizontal_wrapped(|ui| {
+    let gallery = |ui: &mut Ui| {
         ui.spacing_mut().item_spacing = vec2(18.0, 18.0);
         for (label, template) in found {
             template_tile(ui, app, label, template);
         }
-    });
+    };
+    if rtl::is_rtl() {
+        // Rows of tiles from the right, wrapping as in English.
+        ui.with_layout(egui::Layout::right_to_left(Align::Min).with_main_wrap(true), gallery);
+    } else {
+        ui.horizontal_wrapped(gallery);
+    }
 }
 
 fn open_list(app: &mut WordApp, ui: &mut Ui) {
@@ -281,9 +308,16 @@ fn open_list(app: &mut WordApp, ui: &mut Ui) {
         if resp.hovered() {
             ui.painter().rect_filled(r, 4.0, t.hover);
         }
-        icons::paint(ui.painter(), Rect::from_center_size(pos2(r.min.x + 18.0, r.center().y), vec2(22.0, 22.0)), "printLayout", t.icon, t.accent);
-        ui.painter().text(pos2(r.min.x + 40.0, r.min.y + 13.0), Align2::LEFT_CENTER, &name, medium(13.0), t.text);
-        ui.painter().text(pos2(r.min.x + 40.0, r.min.y + 29.0), Align2::LEFT_CENTER, &p, regular(11.0), t.text_dim);
+        icons::paint(
+            ui.painter(),
+            Rect::from_center_size(pos2(rtl::x(r, r.min.x + 18.0), r.center().y), vec2(22.0, 22.0)),
+            "printLayout",
+            t.icon,
+            t.accent,
+        );
+        let start = rtl::start_align2(Align::Center);
+        ui.painter().text(pos2(rtl::x(r, r.min.x + 40.0), r.min.y + 13.0), start, &name, medium(13.0), t.text);
+        ui.painter().text(pos2(rtl::x(r, r.min.x + 40.0), r.min.y + 29.0), start, &p, regular(11.0), t.text_dim);
         if resp.clicked() {
             let _ = app.run("file.open", json!({"path": p}));
             app.ui.backstage = false;
@@ -302,7 +336,7 @@ fn open_page(app: &mut WordApp, ui: &mut Ui) {
     #[cfg(all(unix, not(target_os = "macos"), not(target_arch = "wasm32")))]
     if ui
         .button(egui::RichText::new(tl!("Browse in WordCraft…")).font(medium(14.0)))
-        .on_hover_text(tl!("Open a file with WordCraft's own browser when the system file dialog doesn't appear."))
+        .rtl_hover_text(tl!("Open a file with WordCraft's own browser when the system file dialog doesn't appear."))
         .clicked()
     {
         let _ = app.run("ui.fileBrowser", json!({}));
@@ -323,64 +357,116 @@ fn save_as_page(app: &mut WordApp, ui: &mut Ui) {
 fn info_page(app: &mut WordApp, ui: &mut Ui) {
     heading(ui, "Info");
     let info = app.session.run("file.info", &json!({})).unwrap_or_default();
+    // RTL: Properties in the right-hand column, every column's contents starting at the right.
+    let (first, second) = if rtl::is_rtl() { (1, 0) } else { (0, 1) };
     ui.columns(2, |cols| {
-        let ui = &mut cols[0];
-        ui.label(egui::RichText::new(tl!("Properties")).font(semibold(15.0)));
-        // The fields edit a copy of the document's properties that is read afresh every frame,
-        // so each change goes into the document as it is typed (#260): waiting for the field to
-        // lose focus dropped the keystrokes, and leaving File with Escape never loses it at all.
-        // The keystrokes of one visit to a field are a single undo step.
-        let mut props = app.session.doc.core.clone();
-        let mut edited = None;
-        let mut focused = None;
+        if let Some(ui) = cols.get_mut(first) {
+            if rtl::is_rtl() {
+                rtl::column(ui, |ui| properties_column(app, ui, &info));
+            } else {
+                properties_column(app, ui, &info);
+            }
+        }
+        if let Some(ui) = cols.get_mut(second) {
+            if rtl::is_rtl() {
+                rtl::column(ui, |ui| statistics_column(ui, &info));
+            } else {
+                statistics_column(ui, &info);
+            }
+        }
+    });
+}
+
+/// File › Info's left-hand column (the right-hand one under RTL): the document properties and
+/// Protect Document.
+fn properties_column(app: &mut WordApp, ui: &mut Ui, info: &serde_json::Value) {
+    ui.label(egui::RichText::new(tl!("Properties")).font(semibold(15.0)));
+    // The fields edit a copy of the document's properties that is read afresh every frame,
+    // so each change goes into the document as it is typed (#260): waiting for the field to
+    // lose focus dropped the keystrokes, and leaving File with Escape never loses it at all.
+    // The keystrokes of one visit to a field are a single undo step.
+    let mut props = app.session.doc.core.clone();
+    let mut edited = None;
+    let mut focused = None;
+    // RTL: the grid in a box of its own width at the right (egui's Grid lays out from the left).
+    rtl::fitted(ui, "props", |ui| {
         egui::Grid::new("props").num_columns(2).spacing(vec2(12.0, 6.0)).show(ui, |ui| {
-            for (l, v) in [("Title", &mut props.title), ("Subject", &mut props.subject), ("Author", &mut props.creator), ("Keywords", &mut props.keywords), ("Category", &mut props.category)] {
-                let label = ui.label(tl!(l));
-                let r = ui.add(egui::TextEdit::singleline(v).id_salt(("info-prop", l))).labelled_by(label.id);
+            for (l, v) in [
+                ("Title", &mut props.title),
+                ("Subject", &mut props.subject),
+                ("Author", &mut props.creator),
+                ("Keywords", &mut props.keywords),
+                ("Category", &mut props.category),
+            ] {
+                let (mut label, mut field) = (None, None);
+                rtl::grid_row(
+                    ui,
+                    [&mut |ui: &mut Ui| label = Some(ui.label(tl!(l))), &mut |ui: &mut Ui| {
+                        let mut edit = egui::TextEdit::singleline(v).id_salt(("info-prop", l));
+                        if rtl::is_rtl() {
+                            // The right-to-left cell is only as wide as the column was last frame; give
+                            // the field the width it has in English.
+                            let w = ui.spacing().text_edit_width;
+                            ui.set_min_width(w);
+                            edit = edit.desired_width(w);
+                        }
+                        field = Some(ui.add(edit));
+                    }],
+                );
+                let (Some(label), Some(r)) = (label, field) else { continue };
+                let r = r.labelled_by(label.id);
                 if r.changed() {
                     edited = Some(l);
                 }
                 if r.has_focus() {
                     focused = Some(l);
                 }
-                ui.end_row();
             }
-        });
-        if let Some(field) = edited {
-            if app.info_editing == Some((field, app.session.rev())) {
-                app.session.join_next_undo();
-            }
-            let ok = app.run("file.properties", json!({"title": props.title, "subject": props.subject, "author": props.creator, "keywords": props.keywords, "category": props.category})).is_ok();
-            app.info_editing = ok.then(|| (field, app.session.rev()));
+        })
+    });
+    if let Some(field) = edited {
+        if app.info_editing == Some((field, app.session.rev())) {
+            app.session.join_next_undo();
         }
-        if focused != app.info_editing.map(|(f, _)| f) {
-            app.info_editing = None;
+        let ok = app.run("file.properties", json!({"title": props.title, "subject": props.subject, "author": props.creator, "keywords": props.keywords, "category": props.category})).is_ok();
+        app.info_editing = ok.then(|| (field, app.session.rev()));
+    }
+    if focused != app.info_editing.map(|(f, _)| f) {
+        app.info_editing = None;
+    }
+    // Protect Document › Encrypt with Password (#55).
+    ui.add_space(18.0);
+    ui.label(egui::RichText::new(tl!("Protect Document")).font(semibold(15.0)));
+    let encrypted = info.get("encrypted").and_then(|v| v.as_bool()).unwrap_or(false);
+    let note = if encrypted {
+        tl!("A password is required to open this document.")
+    } else {
+        tl!("Anyone can open this document. Encrypt it with a password to keep it private.")
+    };
+    rtl::wrapped_label(ui, note, |s| egui::RichText::new(s));
+    rtl::row(ui, |ui| {
+        let label = if encrypted { tl!("Change Password…") } else { tl!("Encrypt with Password…") };
+        if ui.button(egui::RichText::new(label).font(medium(13.5))).clicked() {
+            let _ = app.run("file.encrypt", json!({}));
         }
-        // Protect Document › Encrypt with Password (#55).
-        ui.add_space(18.0);
-        ui.label(egui::RichText::new(tl!("Protect Document")).font(semibold(15.0)));
-        let encrypted = info.get("encrypted").and_then(|v| v.as_bool()).unwrap_or(false);
-        ui.label(if encrypted {
-            tl!("A password is required to open this document.")
-        } else {
-            tl!("Anyone can open this document. Encrypt it with a password to keep it private.")
-        });
-        ui.horizontal(|ui| {
-            let label = if encrypted { tl!("Change Password…") } else { tl!("Encrypt with Password…") };
-            if ui.button(egui::RichText::new(label).font(medium(13.5))).clicked() {
-                let _ = app.run("file.encrypt", json!({}));
-            }
-            if encrypted && ui.button(egui::RichText::new(tl!("Remove Password")).font(medium(13.5))).clicked() {
-                let _ = app.run("file.encrypt", json!({"password": null}));
-            }
-        });
-        let ui = &mut cols[1];
-        ui.label(egui::RichText::new(tl!("Statistics")).font(semibold(15.0)));
-        for (l, k) in [("Pages", "pages"), ("Words", "words"), ("Paragraphs", "paragraphs"), ("Sections", "sections"), ("Comments", "comments")] {
-            ui.label(format!("{}: {}", tl!(l), info.get(k).map(|v| v.to_string()).unwrap_or_default()));
+        if encrypted && ui.button(egui::RichText::new(tl!("Remove Password")).font(medium(13.5))).clicked() {
+            let _ = app.run("file.encrypt", json!({"password": null}));
         }
-        let path = info.get("path").and_then(|v| v.as_str()).unwrap_or(tl!("Not saved yet"));
-        ui.label(crate::i18n::fmt(tl!("Location: {path}"), &[("path", path)]));
+    });
+}
+
+/// File › Info's statistics column.
+fn statistics_column(ui: &mut Ui, info: &serde_json::Value) {
+    ui.label(egui::RichText::new(tl!("Statistics")).font(semibold(15.0)));
+    for (l, k) in [("Pages", "pages"), ("Words", "words"), ("Paragraphs", "paragraphs"), ("Sections", "sections"), ("Comments", "comments")] {
+        let value = info.get(k).map(|v| v.to_string()).unwrap_or_default();
+        // The caption (draw order) reads first, so under RTL it is drawn right of the number.
+        ui.label(if rtl::is_rtl() { format!("{value} :{}", tl!(l)) } else { format!("{}: {value}", tl!(l)) });
+    }
+    // A file path is converted as it is inserted; "Not saved yet" is already in draw order.
+    ui.label(match info.get("path").and_then(|v| v.as_str()) {
+        Some(path) => crate::i18n::fmt(tl!("Location: {path}"), &[("path", path)]),
+        None => crate::i18n::fmt_translated(tl!("Location: {path}"), &[("path", tl!("Not saved yet"))]),
     });
 }
 
@@ -389,9 +475,8 @@ fn export_page(app: &mut WordApp, ui: &mut Ui) {
         heading(ui, "Print");
         // Print Markup (a print setting, as in Word): the comments beside each page.
         let mut markup = app.session.prefs.print_markup;
-        if ui
-            .checkbox(&mut markup, tl!("Print Markup"))
-            .on_hover_text(tl!(
+        if rtl::checkbox(ui, &mut markup, tl!("Print Markup"))
+            .rtl_hover_text(tl!(
                 "Comments beside each page and tracked changes in PDFs, prints and images; a comment list at the end of web pages, Markdown and text."
             ))
             .changed()
@@ -403,7 +488,9 @@ fn export_page(app: &mut WordApp, ui: &mut Ui) {
         return;
     }
     heading(ui, "Export");
-    ui.label(tl!("Save a copy in another format. Printing goes through a PDF you can print from any viewer."));
+    rtl::wrapped_label(ui, tl!("Save a copy in another format. Printing goes through a PDF you can print from any viewer."), |s| {
+        egui::RichText::new(s)
+    });
     ui.add_space(12.0);
     crate::print_page::export_formats(app, ui);
 }
@@ -676,5 +763,48 @@ mod tests {
         h.get_by_label("Save As").click();
         h.run_steps(4);
         assert_eq!(h.state().ui.backstage_page, "saveAs");
+    }
+
+    /// File › Info in `lang` at 1440×900: the rects of the nav's Export item, the page heading, the
+    /// Properties and Statistics captions, and the Title field.
+    fn info_rects(lang: &str) -> [egui::Rect; 5] {
+        use egui::accesskit::Role;
+        let mut a = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::from_text("XYZ")), Services::default());
+        a.run("ui.language", json!({"value": lang})).unwrap();
+        a.run("ui.backstage", json!({"value": true, "page": "info"})).unwrap();
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(
+            |ui, app: &mut WordApp| {
+                let ctx = ui.ctx().clone();
+                app.logic(&ctx);
+                app.ui(ui);
+            },
+            a,
+        );
+        h.run_steps(4);
+        let l = crate::i18n::Lang::from_code(lang).unwrap();
+        let tr = |s| crate::i18n::tr(l, s);
+        // "Info" is both the nav item and the heading: the heading is the larger one.
+        let heading = h.query_all_by_label(tr("Info")).map(|n| n.rect()).max_by(|a, b| a.height().total_cmp(&b.height())).unwrap();
+        let field = h.get_by_role_and_label(Role::TextInput, tr("Title")).rect();
+        let out =
+            [h.get_by_label(tr("Export")).rect(), heading, h.get_by_label(tr("Properties")).rect(), h.get_by_label(tr("Statistics")).rect(), field];
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        out
+    }
+
+    #[test]
+    fn backstage_navigation_is_on_the_right_in_arabic() {
+        // The Title field's caption is in the grid's first column, before the field: the field
+        // starts well after the Properties caption's start edge.
+        let [export, heading, props, stats, field] = info_rects("en");
+        assert!(export.right() <= 220.0, "english: the nav column ({export:?}) is at the left");
+        assert!(heading.left() < 300.0, "english: the heading ({heading:?}) starts at the left");
+        assert!(props.center().x < stats.center().x, "english: Properties ({props:?}) is left of Statistics ({stats:?})");
+        assert!(field.left() > props.left() + 20.0, "english: the Title caption ({props:?}) comes left of its field ({field:?})");
+        let [export, heading, props, stats, field] = info_rects("ar");
+        assert!(export.left() >= 1440.0 - 220.0, "arabic: the nav column ({export:?}) is at the right");
+        assert!(heading.right() > 1000.0, "arabic: the heading ({heading:?}) starts at the right");
+        assert!(props.center().x > stats.center().x, "arabic: Properties ({props:?}) is right of Statistics ({stats:?})");
+        assert!(field.right() < props.right() - 20.0, "arabic: the Title caption comes right of its field ({field:?}, Properties {props:?})");
     }
 }

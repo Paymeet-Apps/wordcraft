@@ -106,6 +106,9 @@ pub struct CanvasState {
     /// The scroll offset and its maximum at the end of last frame.
     pub(crate) scroll_offset: egui::Vec2,
     scroll_max: egui::Vec2,
+    /// The vertical scroll bar's handle last frame, when WordCraft draws the bar itself (at the
+    /// left edge, for a right-to-left interface; egui draws it at the right otherwise).
+    pub(crate) rtl_vthumb: Option<Rect>,
     /// Explicit page turn to apply on the next frame (reading navigation buttons/keys).
     scroll_request: Option<egui::Vec2>,
     /// The viewport (the content's visible rect on screen) at the end of last frame; the
@@ -198,6 +201,7 @@ impl Default for CanvasState {
             auto_scroll: Default::default(),
             scroll_offset: egui::Vec2::ZERO,
             scroll_max: egui::Vec2::ZERO,
+            rtl_vthumb: None,
             scroll_request: None,
             viewport: None,
             cols: 1,
@@ -887,7 +891,11 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
         // Bringing the caret into view glides there, or jumps with animation effects off.
         .animated(animate)
         .scroll_source(egui::scroll_area::ScrollSource { mouse_wheel: false, ..Default::default() });
-    if app.session.view.read_mode {
+    // Right to left: WordCraft draws the bars itself, the vertical one at the left edge
+    // (`scroll::start_edge_bars`, below). egui's floating bars take no room, so hiding them
+    // leaves the viewport, and the pages, exactly where they are.
+    let own_bars = crate::rtl::is_rtl() && !app.session.view.read_mode;
+    if app.session.view.read_mode || own_bars {
         scroll_area = scroll_area.scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden);
     }
     if delta != egui::Vec2::ZERO || app.canvas.scroll_request.is_some() || app.session.view.read_mode {
@@ -1213,6 +1221,15 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
         (resp, rects)
     });
     app.canvas.scroll_offset = out.state.offset;
+    app.canvas.rtl_vthumb = None;
+    if own_bars {
+        let (asked, thumb) = crate::scroll::start_edge_bars(ui, out.id.with("rtl_bars"), out.inner_rect, out.content_size, out.state.offset);
+        app.canvas.rtl_vthumb = thumb;
+        if let Some(offset) = asked {
+            app.canvas.scroll_request = Some(offset);
+            ui.ctx().request_repaint();
+        }
+    }
     crate::ink::replay_bar(app, ui, out.inner_rect);
     app.canvas.scroll_max = (out.content_size - out.inner_rect.size()).max(egui::Vec2::ZERO);
     if app.session.view.read_mode {
@@ -2799,6 +2816,53 @@ mod tests {
         );
         h.run_steps(4);
         assert!(h.state().canvas.caret_bg.is_none(), "no caret, no colour lookup");
+    }
+
+    /// The sample document in `lang` at 1440×900, with the pointer over the page: the canvas rect,
+    /// the page rects, the vertical scroll bars' rects (accessibility tree) and the RTL thumb.
+    fn scroll_bar_rects(lang: &str) -> (Rect, Vec<Rect>, Vec<Rect>, Option<Rect>) {
+        use egui_kittest::kittest::Queryable as _;
+        let mut a = WordApp::new(wordcraft_engine::Session::new(wordcraft_engine::sample::sample_document()), Default::default());
+        a.run("ui.language", json!({"value": lang})).unwrap();
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(
+            |ui, app: &mut WordApp| {
+                let ctx = ui.ctx().clone();
+                app.logic(&ctx);
+                app.ui(ui);
+            },
+            a,
+        );
+        h.run_steps(4);
+        let canvas = h.state().canvas.canvas_rect.unwrap();
+        h.hover_at(canvas.center());
+        h.run_steps(4);
+        let bars = h.query_all_by_role(egui::accesskit::Role::ScrollBar).map(|n| n.rect()).filter(|r| r.height() > r.width()).collect();
+        let out = (canvas, h.state().canvas.page_rects.clone(), bars, h.state().canvas.rtl_vthumb);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        out
+    }
+
+    /// Word puts the document's vertical scroll bar at the left edge for an Arabic interface.
+    #[test]
+    fn document_scrollbar_is_on_the_left_in_arabic() {
+        let (canvas, _, bars, _) = scroll_bar_rects("en");
+        assert!(!bars.is_empty() && bars.iter().all(|b| b.center().x > canvas.center().x), "english: the bar ({bars:?}) is at the right");
+        let (canvas, _, bars, thumb) = scroll_bar_rects("ar");
+        assert!(!bars.is_empty() && bars.iter().all(|b| b.center().x < canvas.center().x), "arabic: the bar ({bars:?}) is at the left");
+        let thumb = thumb.unwrap();
+        assert!(thumb.center().x < canvas.center().x, "arabic: the thumb ({thumb:?}) is at the left of the canvas ({canvas:?})");
+        assert!(thumb.left() >= canvas.left() - 0.5 && thumb.height() > 10.0, "arabic: the thumb sits inside the canvas, a real handle");
+    }
+
+    /// The pages themselves don't move with the interface direction: only panes and the scroll bar
+    /// do, and with no pane open the scroll bar takes no room from the pages in either direction.
+    #[test]
+    fn canvas_page_rects_are_identical_in_both_directions() {
+        let (en_canvas, en, _, _) = scroll_bar_rects("en");
+        let (ar_canvas, ar, _, _) = scroll_bar_rects("ar");
+        assert_eq!(en_canvas, ar_canvas, "the canvas viewport is the same");
+        assert!(!en.is_empty());
+        assert_eq!(en, ar, "the page rects are the same");
     }
 
     /// #167: dragging a ruler's margin edge sets that margin, snapped, never negative, and
