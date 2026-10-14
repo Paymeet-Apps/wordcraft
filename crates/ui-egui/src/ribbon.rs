@@ -356,6 +356,8 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
             // The bar is hidden, so a row wider than the window would be clipped with no sign. Edge chevrons show
             // where more is and scroll it on click. Every command also stays reachable through Search Commands.
             let r = scroll.inner_rect;
+            #[cfg(test)]
+            RIBBON_VIEW.with(|v| v.set(Some(r)));
             let overflow = scroll.content_size.x - r.width();
             let offset = scroll.state.offset.x;
             let step = 160.0;
@@ -388,6 +390,12 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                 state.store(ui.ctx(), scroll.id);
             }
         });
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The ribbon row's visible (clipped) rect, last frame.
+    static RIBBON_VIEW: std::cell::Cell<Option<Rect>> = const { std::cell::Cell::new(None) };
 }
 
 /// Custom groups (Customize Ribbon, #379): up to three commands as large buttons, more as small
@@ -436,6 +444,34 @@ fn edge_cue(ui: &mut Ui, rect: Rect, glyph: &str, hint: &str, t: &Tokens) -> boo
     ui.painter().rect_filled(rect, 0.0, t.ribbon);
     ui.painter().text(rect.center(), Align2::CENTER_CENTER, glyph, egui::FontId::proportional(18.0), ink);
     resp.clicked()
+}
+
+/// A horizontally scrolling strip of tiles at most `max_w` wide. Under RTL the tiles start at the
+/// right: they are laid out right to left in a box as wide as they measured last frame, and the
+/// scroll position is kept as the distance from that start, as for the ribbon row.
+fn scroll_strip(ui: &mut Ui, salt: &str, max_w: f32, add: impl FnOnce(&mut Ui)) {
+    let area = egui::ScrollArea::horizontal().max_width(max_w);
+    if !crate::rtl::is_rtl() {
+        area.show(ui, |ui| {
+            ui.horizontal(add);
+        });
+        return;
+    }
+    let id = ui.id().with(("rtl_strip", salt));
+    let (natural, view, from_end) = ui.data(|d| d.get_temp::<(f32, f32, f32)>(id)).unwrap_or((0.0, 0.0, 0.0));
+    let overflow = (natural - view).max(0.0);
+    let mut measured = 0.0;
+    let out = area.id_salt(("rtl_strip", salt)).horizontal_scroll_offset((overflow - from_end).max(0.0)).show(ui, |ui| {
+        let size = vec2(natural, ui.spacing().interact_size.y);
+        measured = ui.allocate_ui_with_layout(size, egui::Layout::right_to_left(egui::Align::Center), add).response.rect.width();
+    });
+    let view_now = out.inner_rect.width();
+    if (measured - natural).abs() > 0.5 || (view_now - view).abs() > 0.5 {
+        ui.data_mut(|d| d.insert_temp(id, (measured, view_now, from_end)));
+        ui.ctx().request_discard("ribbon: RTL strip width changed");
+    } else {
+        ui.data_mut(|d| d.insert_temp(id, (natural, view, (overflow - out.state.offset.x).clamp(0.0, overflow))));
+    }
 }
 
 fn stack(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
@@ -1260,45 +1296,74 @@ fn layout(app: &mut WordApp, ui: &mut Ui) {
                 ui.label(text);
             });
         };
+        // Indents in the File › Options unit.
+        let u = crate::options::unit();
+        let k = u.pt_per_unit();
+        let (mut l, mut b) = (rp.indent_left / k, rp.space_before);
+        let (mut r, mut a) = (rp.indent_right / k, rp.space_after);
+        let (mut set_l, mut set_b, mut set_r, mut set_a) = (false, false, false, false);
+        let indent = |ui: &mut Ui, v: &mut f32| {
+            ui.add_sized(FIELD, egui::DragValue::new(v).speed(3.6 / k).range(-792.0 / k..=1584.0 / k).measure(u).max_decimals(2)).changed()
+        };
+        let spacing = |ui: &mut Ui, v: &mut f32| {
+            ui.add_sized(FIELD, egui::DragValue::new(v).speed(1.0).range(0.0..=1584.0).suffix(format!(" {}", tl!("pt")))).changed()
+        };
+        // Rows through `rtl::grid_row`: under RTL Indent is the right column and each label sits
+        // right of its field.
         crate::rtl::fitted(ui, "layout_para", |ui| {
             egui::Grid::new("layout_para").spacing(vec2(4.0, 1.5)).min_row_height(FIELD.y).show(ui, |ui| {
-                ui.label(egui::RichText::new(tl!("Indent")).small().strong());
-                ui.label("");
-                spaced(ui, egui::RichText::new(tl!("Spacing")).small().strong());
-                ui.end_row();
-                // Indents in the File › Options unit.
-                let u = crate::options::unit();
-                let k = u.pt_per_unit();
-                let mut l = rp.indent_left / k;
-                let mut b = rp.space_before;
-                ui.label(egui::RichText::new(tl!("Left:")).small());
-                if ui
-                    .add_sized(FIELD, egui::DragValue::new(&mut l).speed(3.6 / k).range(-792.0 / k..=1584.0 / k).measure(u).max_decimals(2))
-                    .changed()
-                {
-                    let _ = app.run("para.indents", json!({"left": l * k}));
-                }
-                spaced(ui, egui::RichText::new(tl!("Before:")).small());
-                if ui.add_sized(FIELD, egui::DragValue::new(&mut b).speed(1.0).range(0.0..=1584.0).suffix(format!(" {}", tl!("pt")))).changed() {
-                    let _ = app.run("para.spacing", json!({"before": b}));
-                }
-                ui.end_row();
-                let mut r = rp.indent_right / k;
-                let mut a = rp.space_after;
-                ui.label(egui::RichText::new(tl!("Right:")).small());
-                if ui
-                    .add_sized(FIELD, egui::DragValue::new(&mut r).speed(3.6 / k).range(-792.0 / k..=1584.0 / k).measure(u).max_decimals(2))
-                    .changed()
-                {
-                    let _ = app.run("para.indents", json!({"right": r * k}));
-                }
-                spaced(ui, egui::RichText::new(tl!("After:")).small());
-                if ui.add_sized(FIELD, egui::DragValue::new(&mut a).speed(1.0).range(0.0..=1584.0).suffix(format!(" {}", tl!("pt")))).changed() {
-                    let _ = app.run("para.spacing", json!({"after": a}));
-                }
-                ui.end_row();
+                crate::rtl::grid_row(
+                    ui,
+                    [
+                        &mut |ui| {
+                            ui.label(egui::RichText::new(tl!("Indent")).small().strong());
+                        },
+                        &mut |ui| {
+                            ui.label("");
+                        },
+                        &mut |ui| spaced(ui, egui::RichText::new(tl!("Spacing")).small().strong()),
+                        // Four cells like the rows below, so the headers stay over their columns when reversed.
+                        &mut |ui| {
+                            ui.label("");
+                        },
+                    ],
+                );
+                crate::rtl::grid_row(
+                    ui,
+                    [
+                        &mut |ui| {
+                            ui.label(egui::RichText::new(tl!("Left:")).small());
+                        },
+                        &mut |ui| set_l = indent(ui, &mut l),
+                        &mut |ui| spaced(ui, egui::RichText::new(tl!("Before:")).small()),
+                        &mut |ui| set_b = spacing(ui, &mut b),
+                    ],
+                );
+                crate::rtl::grid_row(
+                    ui,
+                    [
+                        &mut |ui| {
+                            ui.label(egui::RichText::new(tl!("Right:")).small());
+                        },
+                        &mut |ui| set_r = indent(ui, &mut r),
+                        &mut |ui| spaced(ui, egui::RichText::new(tl!("After:")).small()),
+                        &mut |ui| set_a = spacing(ui, &mut a),
+                    ],
+                );
             })
         });
+        if set_l {
+            let _ = app.run("para.indents", json!({"left": l * k}));
+        }
+        if set_b {
+            let _ = app.run("para.spacing", json!({"before": b}));
+        }
+        if set_r {
+            let _ = app.run("para.indents", json!({"right": r * k}));
+        }
+        if set_a {
+            let _ = app.run("para.spacing", json!({"after": a}));
+        }
     });
     group(ui, "Arrange", None, app, |ui, app| {
         big(ui, app, "position", "Position", "arrange.position", json!({}), false);
@@ -2230,27 +2295,33 @@ fn table_design(app: &mut WordApp, ui: &mut Ui) {
     let look = app.session.sel.focus.path.cell().and_then(|(tp, _, _)| app.session.doc.table(app.session.sel.focus.story, &tp).map(|t| t.props.look));
     group(ui, "Table Style Options", None, app, |ui, app| {
         let Some(l) = look else { return };
+        // Rows through `rtl::grid_row`: under RTL the first check box of each row is the right one.
+        let mut changed: Option<(&str, bool)> = None;
         crate::rtl::fitted(ui, "look", |ui| {
             egui::Grid::new("look").show(ui, |ui| {
-                for (row, items) in [
+                for [(l0, k0, v0), (l1, k1, v1)] in [
                     [("Header Row", "headerRow", l.header_row), ("First Column", "firstColumn", l.first_column)],
                     [("Total Row", "totalRow", l.total_row), ("Last Column", "lastColumn", l.last_column)],
                     [("Banded Rows", "bandedRows", l.banded_rows), ("Banded Columns", "bandedColumns", l.banded_columns)],
-                ]
-                .iter()
-                .enumerate()
-                {
-                    let _ = row;
-                    for (label, key, val) in items {
-                        let mut v = *val;
-                        if ui.checkbox(&mut v, tl!(label)).changed() {
-                            let _ = app.run("table.look", json!({ *key: v }));
-                        }
+                ] {
+                    let (mut v0, mut v1) = (v0, v1);
+                    let (mut c0, mut c1) = (false, false);
+                    crate::rtl::grid_row(
+                        ui,
+                        [&mut |ui| c0 = ui.checkbox(&mut v0, tl!(l0)).changed(), &mut |ui| c1 = ui.checkbox(&mut v1, tl!(l1)).changed()],
+                    );
+                    if c0 {
+                        changed = Some((k0, v0));
                     }
-                    ui.end_row();
+                    if c1 {
+                        changed = Some((k1, v1));
+                    }
                 }
             })
         });
+        if let Some((key, v)) = changed {
+            let _ = app.run("table.look", json!({ key: v }));
+        }
     });
     group(ui, "Table Styles", None, app, |ui, app| {
         // The document's own styles first, so a new one shows without scrolling.
@@ -2265,14 +2336,12 @@ fn table_design(app: &mut WordApp, ui: &mut Ui) {
             .collect();
         styles.sort_by_key(|(builtin, _, _)| *builtin);
         crate::rtl::fitted(ui, "table_styles", |ui| {
-            egui::ScrollArea::horizontal().max_width(420.0).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    for (_, id, name) in styles {
-                        if crate::previews::table_style_tile(ui, app, &id).on_hover_text(name).clicked() {
-                            let _ = app.run("table.style", json!({"style": id}));
-                        }
+            scroll_strip(ui, "table_styles", 420.0, |ui| {
+                for (_, id, name) in styles {
+                    if crate::previews::table_style_tile(ui, app, &id).on_hover_text(name).clicked() {
+                        let _ = app.run("table.style", json!({"style": id}));
                     }
-                });
+                }
             })
         });
         stack(ui, |ui| {
@@ -2443,6 +2512,8 @@ fn table_layout(app: &mut WordApp, ui: &mut Ui) {
         });
     });
     group(ui, "Alignment", None, app, |ui, app| {
+        // The 3×3 alignment buttons stand for absolute positions (top left … bottom right), so
+        // their columns are not mirrored under RTL: only the grid's place in the group is.
         crate::rtl::fitted(ui, "cellalign", |ui| {
             egui::Grid::new("cellalign").spacing(vec2(1.0, 1.0)).show(ui, |ui| {
                 for row in [
@@ -2724,6 +2795,51 @@ mod tests {
         assert!(l.unwrap().center().x > r.right() - 12.0, "english: the launcher is at the right");
     }
 
+    /// Grid rows inside groups run right to left too: Layout › Paragraph puts Indent right of
+    /// Spacing and each label right of its field; Table Design's first check box is the right one.
+    #[test]
+    fn ribbon_grid_cells_run_right_to_left_in_arabic() {
+        for code in ["ar", "en"] {
+            let mut h = app_harness(1440.0, code);
+            h.state_mut().run("ui.tab", json!({"tab": "Layout"})).unwrap();
+            h.run_steps(4);
+            let x = |s: &str| {
+                let l = label(code, s);
+                h.query_all_by_label(&l).next().map(|n| n.rect()).unwrap_or_else(|| panic!("{code}: no {l}"))
+            };
+            let (indent, spacing, left) = (x("Indent"), x("Spacing"), x("Left:"));
+            // The Left: field: the spin button on the label's row, nearest to it.
+            let field = h
+                .query_all_by_role(egui::accesskit::Role::SpinButton)
+                .map(|n| n.rect())
+                .filter(|r| r.y_range().contains(left.center().y))
+                .min_by(|a, b| (a.center().x - left.center().x).abs().total_cmp(&(b.center().x - left.center().x).abs()))
+                .unwrap_or_else(|| panic!("{code}: no field beside Left:"));
+            if code == "ar" {
+                assert!(indent.center().x > spacing.center().x, "ar: Indent {indent:?} is right of Spacing {spacing:?}");
+                assert!(left.left() >= field.right() - 0.5, "ar: Left: {left:?} is right of its field {field:?}");
+            } else {
+                assert!(indent.center().x < spacing.center().x, "en: Indent is left of Spacing");
+                assert!(left.right() <= field.left() + 0.5, "en: Left: is left of its field");
+            }
+        }
+        let mut a = WordApp::new(Session::new(wordcraft_doc::Document::new()), crate::Services::default());
+        a.run("insert.table", json!({"rows": 2, "cols": 2})).unwrap();
+        a.run("ui.language", json!({"value": "ar"})).unwrap();
+        a.run("ui.tab", json!({"tab": "Table Design"})).unwrap();
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(1600.0, 600.0)).build_ui_state(
+            |ui, app: &mut WordApp| {
+                let ctx = ui.ctx().clone();
+                app.logic(&ctx);
+                app.ui(ui);
+            },
+            a,
+        );
+        h.run_steps(4);
+        let x = |s: &str| h.query_all_by_label(&label("ar", s)).next().map(|n| n.rect().center().x).unwrap_or_else(|| panic!("no {s}"));
+        assert!(x("Header Row") > x("First Column"), "ar: Header Row is right of First Column");
+    }
+
     /// Review Focus 2: en → ar → en in one session leaves nothing mirrored behind.
     #[test]
     fn ribbon_mirrors_and_unmirrors_on_language_switch() {
@@ -2771,6 +2887,8 @@ mod tests {
         for pair in groups.windows(2) {
             assert!(pair[1].1.right() <= pair[0].1.left() + 0.5, "{} is left of {}", pair[1].0, pair[0].0);
         }
+        let view = RIBBON_VIEW.with(|v| v.get()).unwrap();
+        assert!(view.left() >= 0.0 && view.right() <= 800.0, "the row is clipped inside the window: {view:?}");
         let cut: Vec<&str> = groups.iter().filter(|g| g.1.left() < 0.0).map(|g| g.0.as_str()).collect();
         assert!(!cut.is_empty(), "800 pt is too narrow for Home");
         let leftmost = groups.iter().min_by(|a, b| a.1.left().total_cmp(&b.1.left())).unwrap();
