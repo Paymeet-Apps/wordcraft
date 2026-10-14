@@ -144,7 +144,13 @@ fn undo_list(ui: &mut Ui, app: &mut WordApp) {
                 ui.painter().rect_filled(*r, 0.0, t.selection);
             }
             // Clipped to its row: a long label never runs into the scroll bar.
-            ui.painter_at(r.shrink2(vec2(6.0, 0.0))).text(pos2(r.min.x + 6.0, r.center().y), Align2::LEFT_CENTER, label, regular(12.0), t.text);
+            ui.painter_at(r.shrink2(vec2(6.0, 0.0))).text(
+                pos2(rtl::x(*r, r.min.x + 6.0), r.center().y),
+                rtl::start_align2(egui::Align::Center),
+                label,
+                regular(12.0),
+                t.text,
+            );
         }
     });
     ui.separator();
@@ -683,8 +689,13 @@ mod tests {
     /// WordCraft draws no min/max/close buttons of its own: on Windows and Linux the system frame
     /// does, and on macOS AppKit draws the traffic lights at the top left. Mirroring must leave
     /// that corner alone: content keeps clear of the lights, and the controls swap sides around it.
+    /// Covers the macOS inset and the control swap, plus the 8 pt inset elsewhere; the system
+    /// frame's own buttons are outside what egui can test.
     #[test]
     fn caption_buttons_follow_the_platform_convention_in_arabic() {
+        let plain = title_rects("ar", false);
+        let left = plain.values().map(|r| r.min.x).fold(f32::INFINITY, f32::min);
+        assert!(left >= 8.0, "arabic, non-mac: the leftmost control ({left}) keeps the 8 pt inset");
         let ar = title_rects("ar", true);
         let clear = ar.values().map(|r| r.min.x).fold(f32::INFINITY, f32::min);
         assert!(clear >= MAC_CONTENT_LEFT, "arabic: the leftmost control ({clear}) clears the traffic lights ({MAC_CONTENT_LEFT})");
