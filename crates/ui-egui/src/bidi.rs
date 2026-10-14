@@ -1,4 +1,5 @@
-//! Bidirectional text for the interface (L10N-AR). Currently only the spike that decides how.
+//! Bidirectional text for the interface (L10N-AR): `visual` turns a logical string into the order
+//! egui must draw it in. The spike that chose the approach is documented below.
 //!
 //! **Verdict: Strategy A.** epaint 0.36.2 shapes and joins an Arabic run correctly, but it has no
 //! bidi algorithm, so *runs* must be reordered by us and each run's characters left in logical
@@ -29,9 +30,171 @@
 //!   buffer with a single guessed direction, so the reordering must also split runs at script
 //!   changes (it does, being driven by bidi levels).
 
+use std::borrow::Cow;
+use unicode_bidi::{BidiClass, BidiInfo, Level, bidi_class};
+
+/// Longest string `visual` converts. Longer ones are returned as they are (an allocation cap: no
+/// interface string is near this).
+const MAX_LEN: usize = 64 * 1024;
+
+const LRI: char = '\u{2066}';
+const PDI: char = '\u{2069}';
+
+/// Characters that only steer the bidi algorithm; they are never drawn, so never output.
+fn is_bidi_control(c: char) -> bool {
+    matches!(c, '\u{061C}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')
+}
+
+fn is_strong_rtl(c: char) -> bool {
+    matches!(bidi_class(c), BidiClass::R | BidiClass::AL)
+}
+
+/// The byte length of the `{name}` placeholder token starting at `i` (ASCII `[A-Za-z0-9_]+` in
+/// braces), if there is one.
+fn placeholder_len(s: &str, i: usize) -> Option<usize> {
+    let b = s.as_bytes();
+    if b.get(i) != Some(&b'{') {
+        return None;
+    }
+    let mut j = i.checked_add(1)?;
+    while b.get(j).is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'_') {
+        j = j.checked_add(1)?;
+    }
+    (j > i.saturating_add(1) && b.get(j) == Some(&b'}')).then(|| j.saturating_add(1).saturating_sub(i))
+}
+
+/// The direction of the first strong character (UAX #9 P2); false when there is none.
+/// `{name}` placeholders are skipped: they are filled in later and are not part of the wording.
+#[cfg_attr(not(test), allow(dead_code))] // used from i18n in Task 3
+pub(crate) fn first_strong_is_rtl(s: &str) -> bool {
+    let mut skip_to = 0;
+    for (i, c) in s.char_indices() {
+        if i < skip_to {
+            continue;
+        }
+        if let Some(n) = placeholder_len(s, i) {
+            skip_to = i.saturating_add(n);
+            continue;
+        }
+        match bidi_class(c) {
+            BidiClass::L => return false,
+            BidiClass::R | BidiClass::AL => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// `s` with every `{name}` token wrapped in an LTR isolate, so it stays contiguous and unchanged.
+fn isolate_placeholders(s: &str) -> String {
+    let mut out = String::with_capacity(s.len().saturating_add(16));
+    let mut last = 0;
+    let mut i = 0;
+    while i < s.len() {
+        if let Some(n) = placeholder_len(s, i) {
+            let end = i.saturating_add(n);
+            out.push_str(s.get(last..i).unwrap_or_default());
+            out.push(LRI);
+            out.push_str(s.get(i..end).unwrap_or_default());
+            out.push(PDI);
+            last = end;
+            i = end;
+        } else {
+            i = i.saturating_add(1);
+        }
+    }
+    out.push_str(s.get(last..).unwrap_or_default());
+    out
+}
+
+/// The paired bracket drawn for `c` in a right-to-left run.
+fn mirrored(c: char) -> char {
+    match c {
+        '(' => ')',
+        ')' => '(',
+        '[' => ']',
+        ']' => '[',
+        '{' => '}',
+        '}' => '{',
+        '<' => '>',
+        '>' => '<',
+        '«' => '»',
+        '»' => '«',
+        '‹' => '›',
+        '›' => '‹',
+        other => other,
+    }
+}
+
+/// Appends an odd-level run in the order epaint must draw it: its segments reversed, each
+/// strong-RTL segment in logical order (epaint shapes it right to left), brackets mirrored.
+fn push_rtl_run(out: &mut String, run: &str) {
+    // `(start, end, is_rtl_segment)` byte ranges, in logical order.
+    let mut segments: Vec<(usize, usize, bool)> = Vec::new();
+    for (i, c) in run.char_indices() {
+        let end = i.saturating_add(c.len_utf8());
+        let joins = matches!(c, '\u{200C}' | '\u{200D}') || bidi_class(c) == BidiClass::NSM;
+        match segments.last_mut() {
+            Some(last) if last.2 && (is_strong_rtl(c) || joins) => last.1 = end,
+            _ => segments.push((i, end, is_strong_rtl(c))),
+        }
+    }
+    for &(start, end, rtl) in segments.iter().rev() {
+        let text = run.get(start..end).unwrap_or_default();
+        if rtl {
+            out.push_str(text);
+        } else {
+            out.extend(text.chars().map(mirrored));
+        }
+    }
+}
+
+/// One line (no `\n`) in draw order.
+fn visual_line(line: &str, base_rtl: bool, out: &mut String) {
+    let marked = isolate_placeholders(line);
+    let base = if base_rtl { Level::rtl() } else { Level::ltr() };
+    let info = BidiInfo::new(&marked, Some(base));
+    for para in &info.paragraphs {
+        let (levels, runs) = info.visual_runs(para, para.range.clone());
+        for run in runs {
+            let text = marked.get(run.clone()).unwrap_or_default();
+            let clean: String = text.chars().filter(|&c| !is_bidi_control(c)).collect();
+            if levels.get(run.start).is_some_and(|l| l.is_rtl()) {
+                push_rtl_run(out, &clean);
+            } else {
+                out.push_str(&clean);
+            }
+        }
+    }
+}
+
+/// One text, in the order egui must draw it (epaint has no bidi algorithm; see the module doc).
+///
+/// `base_rtl` is the paragraph direction. Each `\n`-separated line is converted on its own.
+/// `{name}` placeholders are LTR isolates: contiguous and unchanged. Returns the input itself
+/// when drawing it as it stands is already right: no strong right-to-left character and an LTR
+/// base, a single right-to-left run, or text beyond the 64 KiB cap. The output holds no bidi
+/// control characters.
+#[cfg_attr(not(test), allow(dead_code))] // used from i18n in Task 3
+pub(crate) fn visual(s: &str, base_rtl: bool) -> Cow<'_, str> {
+    if s.len() > MAX_LEN || (!base_rtl && !s.chars().any(|c| is_strong_rtl(c) || is_bidi_control(c))) {
+        return Cow::Borrowed(s);
+    }
+    let mut out = String::with_capacity(s.len());
+    for (n, line) in s.split('\n').enumerate() {
+        if n > 0 {
+            out.push('\n');
+        }
+        visual_line(line, base_rtl, &mut out);
+    }
+    if out == s { Cow::Borrowed(s) } else { Cow::Owned(out) }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::{first_strong_is_rtl, visual};
     use egui::{Color32, Context, FontData, FontDefinitions, FontFamily, FontId, RawInput};
+    use std::borrow::Cow;
     use std::sync::Arc;
 
     /// A glyph's rectangle in the font atlas: equal for equal glyph images, wherever drawn.
@@ -140,5 +303,67 @@ mod tests {
         let xs: Vec<f32> = g.iter().map(|t| t.1).collect();
         assert!(xs.windows(2).all(|w| w[0] <= w[1]), "strictly logical order: {g:?}");
         assert_eq!(g.iter().map(|t| t.0).collect::<String>(), "أ - ب");
+    }
+
+    #[test]
+    fn ltr_text_is_borrowed_unchanged() {
+        assert!(matches!(visual("Save As…", false), Cow::Borrowed("Save As…")));
+        assert!(matches!(visual("PDF", true), Cow::Borrowed("PDF")));
+    }
+
+    #[test]
+    fn a_single_arabic_run_is_unchanged() {
+        assert_eq!(visual("ملف", true), "ملف");
+        assert!(matches!(visual("ملف", true), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn runs_are_reordered_for_an_rtl_paragraph() {
+        // Logical "حفظ PDF": the Arabic word is drawn to the right of "PDF", the space between them.
+        assert_eq!(visual("حفظ PDF", true), "PDF حفظ");
+    }
+
+    #[test]
+    fn placeholders_stay_whole_and_take_their_visual_slot() {
+        assert_eq!(visual("صفحة {page} من {pages}", true), "{pages} من {page} صفحة");
+    }
+
+    #[test]
+    fn every_line_is_reordered_on_its_own() {
+        assert_eq!(visual("حفظ PDF\nملف", true), "PDF حفظ\nملف");
+    }
+
+    #[test]
+    fn neutrals_and_brackets_in_rtl_runs_are_ordered_and_mirrored() {
+        assert_eq!(visual("نص (مثال)", true), "(مثال) نص");
+        assert_eq!(visual("الكلمات: 21", true), "21 :الكلمات");
+    }
+
+    #[test]
+    fn output_has_no_bidi_controls() {
+        for s in ["\u{202E}abc", "x\u{200F}y", "{a} ب", "a\u{2067}b"] {
+            for rtl in [true, false] {
+                let out = visual(s, rtl);
+                let is_control = |c: char| matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{200E}' | '\u{200F}' | '\u{061C}');
+                assert!(!out.chars().any(is_control), "{s:?} -> {out:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn hostile_input_never_panics() {
+        for s in ["\u{202E}", "\u{2067}{", "{", "}{", "{a", "\u{0}", &"ب".repeat(100_000), "a\u{2069}\u{2069}", "\u{2029}ب\r\u{85}"] {
+            let _ = visual(s, true);
+            let _ = visual(s, false);
+        }
+    }
+
+    #[test]
+    fn first_strong_direction() {
+        assert!(first_strong_is_rtl("123 ملف"));
+        assert!(!first_strong_is_rtl("report ملف"));
+        assert!(!first_strong_is_rtl("123"));
+        // A placeholder's name is not a strong character of the string.
+        assert!(first_strong_is_rtl("{count} ملف"));
     }
 }
