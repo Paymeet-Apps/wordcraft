@@ -349,7 +349,9 @@ pub fn group_titled(ui: &mut Ui, id_title: &str, title: &str, launcher: Option<&
             ui.painter().rect_filled(lr.expand(2.0), 2.0, t.hover);
         }
         icons::paint(ui.painter(), lr, "launcher", t.text_dim, t.accent);
-        if resp.on_hover_text(crate::i18n::fmt(tl!("{group} settings"), &[("group", title)])).clicked() {
+        // A built-in title is translated (draw order); a custom group's name is the author's text.
+        let group = if title == tl!(id_title) { title.to_string() } else { crate::i18n::isolate(title) };
+        if resp.on_hover_text(crate::i18n::fmt_translated(tl!("{group} settings"), &[("group", &group)])).clicked() {
             let _ = app.run(cmd, serde_json::json!({}));
         }
     }

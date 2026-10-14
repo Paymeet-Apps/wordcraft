@@ -1218,7 +1218,7 @@ fn bundled_interface_fonts_cover_bulgarian_without_system_fallbacks() {
 static TEST_RTL: LangInfo = LangInfo {
     code: "xx-rtl",
     name: "RTL",
-    source: "\tSaved {path}\tتم الحفظ: {path}\n\tPage {page} of {pages}\tصفحة {page} من {pages}\n\tHome\tالرئيسية\n\tFont\tالخط\n",
+    source: "\tSaved {path}\tتم الحفظ: {path}\n\tPage {page} of {pages}\tصفحة {page} من {pages}\n\tHome\tالرئيسية\n\tFont\tالخط\n\tUndo {action}\tتراجع: {action}\n\tSave PDF\tحفظ PDF\n",
     prefer_hans: false,
     rtl: true,
     editing_lang: None,
@@ -1251,6 +1251,23 @@ fn ltr_fmt_is_unchanged() {
     set_current(Lang::EN);
     assert_eq!(fmt("Saved {path}", &[("path", "تقرير.docx")]), "Saved تقرير.docx");
     assert_eq!(fmt("{a} {b} {c}", &[("a", "1"), ("b", "{a}")]), "1 {a} {c}");
+}
+
+#[test]
+fn translated_values_are_not_reordered_twice_in_rtl() {
+    set_current(Lang(&TEST_RTL));
+    // The catalog stores "حفظ PDF" as "PDF حفظ" (draw order); the whole sentence must come out as
+    // the logical "تراجع: حفظ PDF" converted once.
+    assert_eq!(t("Save PDF"), "PDF حفظ");
+    let whole = crate::bidi::visual("تراجع: حفظ PDF", true).into_owned();
+    assert_eq!(prefixed("Undo", "Save PDF"), whole);
+    assert_eq!(fmt_translated(t("Undo {action}"), &[("action", t("Save PDF"))]), whole);
+    // `fmt` is for user text: it converts a value that is still logical.
+    assert_eq!(fmt(t("Undo {action}"), &[("action", "حفظ PDF")]), whole);
+    assert_eq!(isolate("حفظ PDF"), "PDF حفظ");
+    set_current(Lang::EN);
+    assert_eq!(isolate("حفظ PDF"), "حفظ PDF");
+    assert_eq!(fmt_translated("{a}", &[("a", "{a}")]), "{a}");
 }
 
 #[test]

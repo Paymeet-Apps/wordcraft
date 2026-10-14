@@ -285,7 +285,12 @@ fn styles(app: &mut WordApp, ui: &mut Ui) {
         .get(&cur)
         .map(crate::i18n::style_name)
         .unwrap_or_else(|| st.get("styleName").and_then(Value::as_str).unwrap_or("").to_string());
-    ui.label(egui::RichText::new(crate::i18n::fmt(tl!("Current style: {style}"), &[("style", &current_name)])).small());
+    // A built-in name comes translated (draw order); an author's style name is converted here.
+    let current_name = match app.session.doc.styles.get(&cur) {
+        Some(style) if style.builtin => current_name,
+        _ => crate::i18n::isolate(&current_name),
+    };
+    ui.label(egui::RichText::new(crate::i18n::fmt_translated(tl!("Current style: {style}"), &[("style", &current_name)])).small());
     ui.horizontal(|ui| {
         if ui.button(tl!("New Style…")).clicked() {
             app.dialog = crate::dialogs::Dialog::open("newStyle", app);
@@ -665,7 +670,7 @@ fn describe(prop: &str, v: &Value) -> String {
     };
     let value = match (prop, v) {
         (_, Value::Bool(true)) => return label.to_string(),
-        (_, Value::Bool(false)) => return crate::i18n::fmt(tl!("Not {name}"), &[("name", label)]),
+        (_, Value::Bool(false)) => return crate::i18n::fmt_translated(tl!("Not {name}"), &[("name", label)]),
         ("scale", Value::Number(n)) => format!("{}%", trim_num(n.as_f64().unwrap_or(100.0))),
         ("outlineLevel", Value::Number(n)) => match n.as_u64().unwrap_or(9) {
             l @ 0..=8 => crate::i18n::fmt(tl!("Level {n}"), &[("n", &(l + 1).to_string())]),
@@ -687,8 +692,8 @@ fn describe(prop: &str, v: &Value) -> String {
         ("lineSpacing", Value::Object(o)) => {
             let x = o.get("value").and_then(Value::as_f64).unwrap_or(1.0);
             match o.get("rule").and_then(Value::as_str) {
-                Some("atLeast") => crate::i18n::fmt(tl!("At least {n}"), &[("n", &pt(x))]),
-                Some("exactly") => crate::i18n::fmt(tl!("Exactly {n}"), &[("n", &pt(x))]),
+                Some("atLeast") => crate::i18n::fmt_translated(tl!("At least {n}"), &[("n", &pt(x))]),
+                Some("exactly") => crate::i18n::fmt_translated(tl!("Exactly {n}"), &[("n", &pt(x))]),
                 _ => crate::i18n::fmt(tl!("{n} lines"), &[("n", &trim_num(x))]),
             }
         }

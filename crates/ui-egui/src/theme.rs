@@ -450,6 +450,18 @@ pub fn font_definitions(prefer_hans: bool, system_cjk: bool) -> FontDefinitions 
     }
     fonts.families.insert(FontFamily::Name("medium".into()), vec!["InterMedium".into(), "Inter".into(), "SourceSans".into()]);
     fonts.families.insert(FontFamily::Name("semibold".into()), vec!["InterSemiBold".into(), "Inter".into(), "SourceSans".into()]);
+    // Inter lacks some symbols (U+2039 `‹`, the right-to-left location separator): regular text
+    // gets them from egui's default faces, so the medium and semibold families borrow those too.
+    let defaults = fonts.families.get(&FontFamily::Proportional).cloned().unwrap_or_default();
+    for fam in ["medium", "semibold"] {
+        if let Some(v) = fonts.families.get_mut(&FontFamily::Name(fam.into())) {
+            for name in &defaults {
+                if !v.contains(name) {
+                    v.push(name.clone());
+                }
+            }
+        }
+    }
     let add_cjk = |fonts: &mut FontDefinitions, name: String, data: FontData| {
         fonts.font_data.insert(name.clone(), Arc::new(data));
         for fam in [FontFamily::Proportional, FontFamily::Name("medium".into()), FontFamily::Name("semibold".into())] {
@@ -769,6 +781,20 @@ mod tests {
                 assert!(!src.contains(b), "{name} hard-codes {b}; use theme::Tokens");
             }
         }
+    }
+
+    #[test]
+    fn right_to_left_location_separator_has_a_glyph_in_every_interface_weight() {
+        // `i18n::location` joins with U+2039 in right-to-left languages; src/i18n/ isn't scanned
+        // by the test below.
+        let ctx = egui::Context::default();
+        ctx.set_fonts(super::font_definitions(false, false));
+        ctx.run_ui(egui::RawInput::default(), |_| {}).drop_without_applying_deltas();
+        let missing: Vec<_> = [super::regular(12.5), super::medium(12.5), super::semibold(12.5)]
+            .into_iter()
+            .filter(|font| !ctx.fonts_mut(|f| f.has_glyph(font, '\u{2039}')))
+            .collect();
+        assert!(missing.is_empty(), "no U+2039 in {missing:?}");
     }
 
     /// Symbols written as text in the interface code must exist in the interface fonts (Inter and

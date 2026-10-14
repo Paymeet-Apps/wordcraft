@@ -526,13 +526,34 @@ pub fn prefixed(prefix: &str, rest: &str) -> String {
     if rest.is_empty() {
         return t(prefix).to_string();
     }
-    fmt(t(&format!("{prefix} {{action}}")), &[("action", t(rest))])
+    fmt_translated(t(&format!("{prefix} {{action}}")), &[("action", t(rest))])
 }
 
 /// Fill `{name}` placeholders in one pass. Unknown placeholders stay as written, and inserted
 /// values are never read as templates again, so a file name containing `{n}` stays intact.
+///
+/// Right to left: each value is converted to draw order on its own (see [`isolate`]), so use this
+/// for user and document text (file names, numbers, headings). Values that came out of the catalog
+/// (`t`, `tl!`, `tr`, `tc`, `location`, `builtin_style_name`) are already in draw order: pass them
+/// to [`fmt_translated`] instead, or they are reordered twice.
 pub fn fmt(template: &str, args: &[(&str, &str)]) -> String {
-    let rtl = current().is_rtl();
+    fill(template, args, current().is_rtl())
+}
+
+/// Like [`fmt`], for values that are already in draw order because they came from the catalog:
+/// they are inserted unchanged. When one call mixes translated and user values, run the user
+/// values through [`isolate`] first and call this.
+pub fn fmt_translated(template: &str, args: &[(&str, &str)]) -> String {
+    fill(template, args, false)
+}
+
+/// A user or document value as it must be inserted into a translated sentence: converted to draw
+/// order in its own direction when the interface is right to left, else unchanged.
+pub fn isolate(value: &str) -> String {
+    if current().is_rtl() { crate::bidi::visual(value, crate::bidi::first_strong_is_rtl(value)).into_owned() } else { value.to_string() }
+}
+
+fn fill(template: &str, args: &[(&str, &str)], convert: bool) -> String {
     let mut out = String::with_capacity(template.len());
     let mut rest = template;
     while let Some((before, after_open)) = rest.split_once('{') {
@@ -543,9 +564,8 @@ pub fn fmt(template: &str, args: &[(&str, &str)]) -> String {
             return out;
         };
         match args.iter().find(|(key, _)| *key == name) {
-            // Right to left: the template is already in draw order; each value is converted on its
-            // own, in its own direction, so it stays intact inside the sentence.
-            Some((_, value)) if rtl => out.push_str(&crate::bidi::visual(value, crate::bidi::first_strong_is_rtl(value))),
+            // The template is already in draw order; a converted value stays intact inside it.
+            Some((_, value)) if convert => out.push_str(&crate::bidi::visual(value, crate::bidi::first_strong_is_rtl(value))),
             Some((_, value)) => out.push_str(value),
             None => {
                 out.push('{');
