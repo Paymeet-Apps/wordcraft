@@ -24,6 +24,7 @@ pub mod a11y;
 pub mod a11y_pane;
 pub mod autoscroll;
 pub mod backstage;
+mod bidi;
 pub mod canvas;
 pub mod caret_glide;
 pub mod chrome;
