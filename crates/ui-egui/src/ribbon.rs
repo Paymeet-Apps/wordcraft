@@ -30,7 +30,7 @@ fn reading_toolbar(app: &mut WordApp, ui: &mut Ui, t: Tokens) {
         .exact_size(46.0)
         .frame(egui::Frame::NONE.fill(t.ribbon).inner_margin(egui::Margin::symmetric(12, 6)).stroke(Stroke::new(1.0, t.border)))
         .show(ui, |ui| {
-            ui.horizontal_centered(|ui| {
+            crate::chrome::row_centered(ui, |ui| {
                 ui.label(egui::RichText::new(tl!("Reading Mode")).font(semibold(14.0)));
                 ui.separator();
                 let w = app.session.view.read_column_width;
@@ -81,7 +81,7 @@ fn reading_toolbar(app: &mut WordApp, ui: &mut Ui, t: Tokens) {
                     let _ = app.run("view.navigationPane", json!({"value": true}));
                     app.ui.nav_tab = "headings".into();
                 }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.with_layout(crate::rtl::end_layout(egui::Align::Center), |ui| {
                     if ui.button(tl!("Edit Document")).clicked() {
                         let _ = app.run("view.printLayout", json!({}));
                     }
@@ -192,9 +192,14 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
     // Tab strip.
     egui::Panel::top("tabs")
         .exact_size(30.0)
-        .frame(egui::Frame::NONE.fill(t.tab_strip).inner_margin(egui::Margin { left: 8, right: 10, top: 0, bottom: 0 }))
+        .frame(egui::Frame::NONE.fill(t.tab_strip).inner_margin(if crate::rtl::is_rtl() {
+            egui::Margin { left: 10, right: 8, top: 0, bottom: 0 }
+        } else {
+            egui::Margin { left: 8, right: 10, top: 0, bottom: 0 }
+        }))
         .show(ui, |ui| {
-            ui.horizontal_centered(|ui| {
+            // Under RTL File is at the right and the tabs run leftwards; Share sits at the left end.
+            crate::chrome::row_centered(ui, |ui| {
                 ui.spacing_mut().item_spacing = vec2(2.0, 0.0);
                 for (tab, custom) in &tabs {
                     let (tab, custom) = (tab.as_str(), *custom);
@@ -225,7 +230,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                     }
                     resp.context_menu(|ui| crate::widgets::customize_menu_items(ui, app));
                 }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.with_layout(crate::rtl::end_layout(egui::Align::Center), |ui| {
                     // No document open (#1129): nothing to share, edit or comment on.
                     if !app.has_document() {
                         ui.disable();
@@ -237,12 +242,18 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                     ui.painter().rect_filled(r, 4.0, if resp.hovered() { t.accent_text } else { t.accent });
                     icons::paint(
                         ui.painter(),
-                        Rect::from_center_size(pos2(r.min.x + 14.0, r.center().y), vec2(14.0, 14.0)),
+                        Rect::from_center_size(pos2(crate::rtl::x(r, r.min.x + 14.0), r.center().y), vec2(14.0, 14.0)),
                         "share",
                         t.on_accent,
                         t.on_accent,
                     );
-                    ui.painter().text(pos2(r.min.x + 26.0, r.center().y), Align2::LEFT_CENTER, share, medium(12.0), t.on_accent);
+                    ui.painter().text(
+                        pos2(crate::rtl::x(r, r.min.x + 26.0), r.center().y),
+                        crate::rtl::start_align2(egui::Align::Center),
+                        share,
+                        medium(12.0),
+                        t.on_accent,
+                    );
                     if resp.on_hover_text(tl!("Export a copy to share (PDF, Word document)")).clicked() {
                         let _ = app.run("ui.backstage", json!({"value": true, "page": "export"}));
                     }
@@ -285,8 +296,22 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
             let bg = ui.interact(ui.max_rect(), ui.id().with("ribbon_background"), Sense::click());
             bg.context_menu(|ui| crate::widgets::customize_menu_items(ui, app));
             let entry = user_tabs.iter().find(|e| e.name == app.ui.tab);
-            let scroll = egui::ScrollArea::horizontal().scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden).show(ui, |ui| {
-                ui.horizontal_top(|ui| {
+            // Under RTL the row starts at the right and overflows past the left edge. egui scrolls
+            // from the left, so the row is laid out right to left in a box as wide as it measured
+            // last frame, and the scroll position is kept as the distance from the row's start
+            // (its right end), per tab. English never reads that state or the RTL scroll area.
+            let rtl = crate::rtl::is_rtl();
+            let rtl_id = ui.id().with(("ribbon_rtl_row", app.ui.tab.as_str()));
+            let (natural, from_end) = if rtl { ui.data(|d| d.get_temp::<(f32, f32)>(rtl_id)).unwrap_or((0.0, 0.0)) } else { (0.0, 0.0) };
+            let view_w = ui.available_width();
+            let row_w = natural.max(view_w);
+            let mut area = egui::ScrollArea::horizontal().scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden);
+            if rtl {
+                area = area.id_salt("ribbon_rtl").horizontal_scroll_offset((row_w - view_w - from_end).max(0.0));
+            }
+            let mut measured = 0.0;
+            let scroll = area.show(ui, |ui| {
+                let body = |ui: &mut Ui| {
                     ui.spacing_mut().item_spacing = vec2(2.0, 2.0);
                     match entry {
                         // Every tab hidden: nothing to show.
@@ -320,7 +345,13 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                     if let Some(e) = entry {
                         custom_groups(app, ui, &e.groups);
                     }
-                });
+                };
+                if rtl {
+                    let row = ui.allocate_ui_with_layout(vec2(row_w, ui.available_height()), egui::Layout::right_to_left(egui::Align::Min), body);
+                    measured = row.response.rect.width();
+                } else {
+                    ui.horizontal_top(body);
+                }
             });
             // The bar is hidden, so a row wider than the window would be clipped with no sign. Edge chevrons show
             // where more is and scroll it on click. Every command also stays reachable through Search Commands.
@@ -341,7 +372,17 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                     next = Some(offset + step);
                 }
             }
-            if let Some(x) = next {
+            if rtl {
+                if (measured - natural).abs() > 0.5 {
+                    // The row was laid out in a box of the wrong width: keep the position, redo the frame.
+                    ui.data_mut(|d| d.insert_temp(rtl_id, (measured, from_end)));
+                    ui.ctx().request_discard("ribbon: RTL row width changed");
+                } else {
+                    let overflow = (row_w - view_w).max(0.0);
+                    let offset = next.unwrap_or(offset).clamp(0.0, overflow);
+                    ui.data_mut(|d| d.insert_temp(rtl_id, (measured, overflow - offset)));
+                }
+            } else if let Some(x) = next {
                 let mut state = scroll.state;
                 state.offset.x = x.clamp(0.0, overflow.max(0.0));
                 state.store(ui.ctx(), scroll.id);
@@ -390,6 +431,7 @@ fn two_lines(label: &str) -> String {
 /// A chevron over a ribbon edge that is also a button; `true` on the frame it is clicked.
 fn edge_cue(ui: &mut Ui, rect: Rect, glyph: &str, hint: &str, t: &Tokens) -> bool {
     let resp = ui.interact(rect, ui.id().with(glyph), Sense::click()).on_hover_text(hint);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, hint));
     let ink = if resp.hovered() { t.text } else { t.text_dim };
     ui.painter().rect_filled(rect, 0.0, t.ribbon);
     ui.painter().text(rect.center(), Align2::CENTER_CENTER, glyph, egui::FontId::proportional(18.0), ink);
@@ -397,7 +439,7 @@ fn edge_cue(ui: &mut Ui, rect: Rect, glyph: &str, hint: &str, t: &Tokens) -> boo
 }
 
 fn stack(ui: &mut Ui, add: impl FnOnce(&mut Ui)) {
-    ui.vertical(|ui| {
+    crate::rtl::column(ui, |ui| {
         ui.spacing_mut().item_spacing = vec2(1.0, 0.0);
         add(ui);
     });
@@ -1061,7 +1103,7 @@ fn gallery_pen(ui: &mut Ui, app: &mut WordApp, i: usize, pen: wordcraft_engine::
 fn style_set_box(app: &mut WordApp, ui: &mut Ui) -> (Rect, Rect) {
     ui.add_space(4.0);
     let (gallery, _) = ui.allocate_exact_size(vec2(crate::previews::STYLE_SET_GALLERY_W, CONTENT_H), Sense::hover());
-    let mut gui = ui.new_child(egui::UiBuilder::new().max_rect(gallery).layout(egui::Layout::left_to_right(egui::Align::Min)));
+    let mut gui = ui.new_child(egui::UiBuilder::new().max_rect(gallery).layout(crate::rtl::row_layout(egui::Align::Min)));
     gui.set_clip_rect(gallery.intersect(ui.clip_rect()));
     gui.spacing_mut().item_spacing = vec2(1.0, 1.0);
     crate::previews::style_set_gallery(app, &mut gui);
@@ -1218,36 +1260,44 @@ fn layout(app: &mut WordApp, ui: &mut Ui) {
                 ui.label(text);
             });
         };
-        egui::Grid::new("layout_para").spacing(vec2(4.0, 1.5)).min_row_height(FIELD.y).show(ui, |ui| {
-            ui.label(egui::RichText::new(tl!("Indent")).small().strong());
-            ui.label("");
-            spaced(ui, egui::RichText::new(tl!("Spacing")).small().strong());
-            ui.end_row();
-            // Indents in the File › Options unit.
-            let u = crate::options::unit();
-            let k = u.pt_per_unit();
-            let mut l = rp.indent_left / k;
-            let mut b = rp.space_before;
-            ui.label(egui::RichText::new(tl!("Left:")).small());
-            if ui.add_sized(FIELD, egui::DragValue::new(&mut l).speed(3.6 / k).range(-792.0 / k..=1584.0 / k).measure(u).max_decimals(2)).changed() {
-                let _ = app.run("para.indents", json!({"left": l * k}));
-            }
-            spaced(ui, egui::RichText::new(tl!("Before:")).small());
-            if ui.add_sized(FIELD, egui::DragValue::new(&mut b).speed(1.0).range(0.0..=1584.0).suffix(format!(" {}", tl!("pt")))).changed() {
-                let _ = app.run("para.spacing", json!({"before": b}));
-            }
-            ui.end_row();
-            let mut r = rp.indent_right / k;
-            let mut a = rp.space_after;
-            ui.label(egui::RichText::new(tl!("Right:")).small());
-            if ui.add_sized(FIELD, egui::DragValue::new(&mut r).speed(3.6 / k).range(-792.0 / k..=1584.0 / k).measure(u).max_decimals(2)).changed() {
-                let _ = app.run("para.indents", json!({"right": r * k}));
-            }
-            spaced(ui, egui::RichText::new(tl!("After:")).small());
-            if ui.add_sized(FIELD, egui::DragValue::new(&mut a).speed(1.0).range(0.0..=1584.0).suffix(format!(" {}", tl!("pt")))).changed() {
-                let _ = app.run("para.spacing", json!({"after": a}));
-            }
-            ui.end_row();
+        crate::rtl::fitted(ui, "layout_para", |ui| {
+            egui::Grid::new("layout_para").spacing(vec2(4.0, 1.5)).min_row_height(FIELD.y).show(ui, |ui| {
+                ui.label(egui::RichText::new(tl!("Indent")).small().strong());
+                ui.label("");
+                spaced(ui, egui::RichText::new(tl!("Spacing")).small().strong());
+                ui.end_row();
+                // Indents in the File › Options unit.
+                let u = crate::options::unit();
+                let k = u.pt_per_unit();
+                let mut l = rp.indent_left / k;
+                let mut b = rp.space_before;
+                ui.label(egui::RichText::new(tl!("Left:")).small());
+                if ui
+                    .add_sized(FIELD, egui::DragValue::new(&mut l).speed(3.6 / k).range(-792.0 / k..=1584.0 / k).measure(u).max_decimals(2))
+                    .changed()
+                {
+                    let _ = app.run("para.indents", json!({"left": l * k}));
+                }
+                spaced(ui, egui::RichText::new(tl!("Before:")).small());
+                if ui.add_sized(FIELD, egui::DragValue::new(&mut b).speed(1.0).range(0.0..=1584.0).suffix(format!(" {}", tl!("pt")))).changed() {
+                    let _ = app.run("para.spacing", json!({"before": b}));
+                }
+                ui.end_row();
+                let mut r = rp.indent_right / k;
+                let mut a = rp.space_after;
+                ui.label(egui::RichText::new(tl!("Right:")).small());
+                if ui
+                    .add_sized(FIELD, egui::DragValue::new(&mut r).speed(3.6 / k).range(-792.0 / k..=1584.0 / k).measure(u).max_decimals(2))
+                    .changed()
+                {
+                    let _ = app.run("para.indents", json!({"right": r * k}));
+                }
+                spaced(ui, egui::RichText::new(tl!("After:")).small());
+                if ui.add_sized(FIELD, egui::DragValue::new(&mut a).speed(1.0).range(0.0..=1584.0).suffix(format!(" {}", tl!("pt")))).changed() {
+                    let _ = app.run("para.spacing", json!({"after": a}));
+                }
+                ui.end_row();
+            })
         });
     });
     group(ui, "Arrange", None, app, |ui, app| {
@@ -1786,26 +1836,28 @@ fn smart_art_design(app: &mut WordApp, ui: &mut Ui) {
     });
     group(ui, "Layouts", None, app, |ui, app| {
         let t = Tokens::get(ui.ctx());
-        egui::Grid::new("smart_art_layout_gallery").spacing(vec2(2.0, 2.0)).show(ui, |ui| {
-            for (k, layout) in SmartArtLayout::ALL.into_iter().enumerate() {
-                let (r, resp) = ui.allocate_exact_size(vec2(46.0, 31.0), Sense::click());
-                let on = g.layout == layout;
-                let fill = if on {
-                    t.checked
-                } else if resp.hovered() {
-                    t.hover
-                } else {
-                    t.ribbon
-                };
-                ui.painter().rect(r, 3.0, fill, Stroke::new(1.0, if on { t.accent } else { t.border }), egui::StrokeKind::Inside);
-                crate::dialogs_smart_art::preview(ui.painter(), r.shrink(2.0), layout, g.colors, &theme, t.text_dim);
-                if resp.on_hover_text(tl!(layout.label())).clicked() && !on {
-                    let _ = app.run("smartArt.layout", json!({"layout": layout.id()}));
+        crate::rtl::fitted(ui, "smart_art_layout_gallery", |ui| {
+            egui::Grid::new("smart_art_layout_gallery").spacing(vec2(2.0, 2.0)).show(ui, |ui| {
+                for (k, layout) in SmartArtLayout::ALL.into_iter().enumerate() {
+                    let (r, resp) = ui.allocate_exact_size(vec2(46.0, 31.0), Sense::click());
+                    let on = g.layout == layout;
+                    let fill = if on {
+                        t.checked
+                    } else if resp.hovered() {
+                        t.hover
+                    } else {
+                        t.ribbon
+                    };
+                    ui.painter().rect(r, 3.0, fill, Stroke::new(1.0, if on { t.accent } else { t.border }), egui::StrokeKind::Inside);
+                    crate::dialogs_smart_art::preview(ui.painter(), r.shrink(2.0), layout, g.colors, &theme, t.text_dim);
+                    if resp.on_hover_text(tl!(layout.label())).clicked() && !on {
+                        let _ = app.run("smartArt.layout", json!({"layout": layout.id()}));
+                    }
+                    if k % 4 == 3 {
+                        ui.end_row();
+                    }
                 }
-                if k % 4 == 3 {
-                    ui.end_row();
-                }
-            }
+            })
         });
     });
     group(ui, "SmartArt Styles", None, app, |ui, app| {
@@ -2178,24 +2230,26 @@ fn table_design(app: &mut WordApp, ui: &mut Ui) {
     let look = app.session.sel.focus.path.cell().and_then(|(tp, _, _)| app.session.doc.table(app.session.sel.focus.story, &tp).map(|t| t.props.look));
     group(ui, "Table Style Options", None, app, |ui, app| {
         let Some(l) = look else { return };
-        egui::Grid::new("look").show(ui, |ui| {
-            for (row, items) in [
-                [("Header Row", "headerRow", l.header_row), ("First Column", "firstColumn", l.first_column)],
-                [("Total Row", "totalRow", l.total_row), ("Last Column", "lastColumn", l.last_column)],
-                [("Banded Rows", "bandedRows", l.banded_rows), ("Banded Columns", "bandedColumns", l.banded_columns)],
-            ]
-            .iter()
-            .enumerate()
-            {
-                let _ = row;
-                for (label, key, val) in items {
-                    let mut v = *val;
-                    if ui.checkbox(&mut v, tl!(label)).changed() {
-                        let _ = app.run("table.look", json!({ *key: v }));
+        crate::rtl::fitted(ui, "look", |ui| {
+            egui::Grid::new("look").show(ui, |ui| {
+                for (row, items) in [
+                    [("Header Row", "headerRow", l.header_row), ("First Column", "firstColumn", l.first_column)],
+                    [("Total Row", "totalRow", l.total_row), ("Last Column", "lastColumn", l.last_column)],
+                    [("Banded Rows", "bandedRows", l.banded_rows), ("Banded Columns", "bandedColumns", l.banded_columns)],
+                ]
+                .iter()
+                .enumerate()
+                {
+                    let _ = row;
+                    for (label, key, val) in items {
+                        let mut v = *val;
+                        if ui.checkbox(&mut v, tl!(label)).changed() {
+                            let _ = app.run("table.look", json!({ *key: v }));
+                        }
                     }
+                    ui.end_row();
                 }
-                ui.end_row();
-            }
+            })
         });
     });
     group(ui, "Table Styles", None, app, |ui, app| {
@@ -2210,14 +2264,16 @@ fn table_design(app: &mut WordApp, ui: &mut Ui) {
             .map(|s| (s.builtin, s.id.clone(), crate::i18n::style_name(s)))
             .collect();
         styles.sort_by_key(|(builtin, _, _)| *builtin);
-        egui::ScrollArea::horizontal().max_width(420.0).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                for (_, id, name) in styles {
-                    if crate::previews::table_style_tile(ui, app, &id).on_hover_text(name).clicked() {
-                        let _ = app.run("table.style", json!({"style": id}));
+        crate::rtl::fitted(ui, "table_styles", |ui| {
+            egui::ScrollArea::horizontal().max_width(420.0).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    for (_, id, name) in styles {
+                        if crate::previews::table_style_tile(ui, app, &id).on_hover_text(name).clicked() {
+                            let _ = app.run("table.style", json!({"style": id}));
+                        }
                     }
-                }
-            });
+                });
+            })
         });
         stack(ui, |ui| {
             let current = look.and_then(|_| {
@@ -2387,17 +2443,19 @@ fn table_layout(app: &mut WordApp, ui: &mut Ui) {
         });
     });
     group(ui, "Alignment", None, app, |ui, app| {
-        egui::Grid::new("cellalign").spacing(vec2(1.0, 1.0)).show(ui, |ui| {
-            for row in [
-                [("topLeft", "Align Top Left"), ("topCenter", "Align Top Center"), ("topRight", "Align Top Right")],
-                [("centerLeft", "Align Center Left"), ("center", "Align Center"), ("centerRight", "Align Center Right")],
-                [("bottomLeft", "Align Bottom Left"), ("bottomCenter", "Align Bottom Center"), ("bottomRight", "Align Bottom Right")],
-            ] {
-                for (v, tip) in row {
-                    small(ui, app, "cellAlign", None, tip, "table.cellAlign", json!({"value": v}), false);
+        crate::rtl::fitted(ui, "cellalign", |ui| {
+            egui::Grid::new("cellalign").spacing(vec2(1.0, 1.0)).show(ui, |ui| {
+                for row in [
+                    [("topLeft", "Align Top Left"), ("topCenter", "Align Top Center"), ("topRight", "Align Top Right")],
+                    [("centerLeft", "Align Center Left"), ("center", "Align Center"), ("centerRight", "Align Center Right")],
+                    [("bottomLeft", "Align Bottom Left"), ("bottomCenter", "Align Bottom Center"), ("bottomRight", "Align Bottom Right")],
+                ] {
+                    for (v, tip) in row {
+                        small(ui, app, "cellAlign", None, tip, "table.cellAlign", json!({"value": v}), false);
+                    }
+                    ui.end_row();
                 }
-                ui.end_row();
-            }
+            })
         });
         big(ui, app, "textDirection", "Text\nDirection", "table.textDirection", json!({}), false);
         big(ui, app, "cellMargins", "Cell\nMargins", "table.cellMargins", json!({}), false);
@@ -2573,6 +2631,183 @@ mod tests {
         tall.sort();
         tall.dedup();
         assert!(tall.is_empty(), "groups taller than the ribbon: {tall:#?}");
+    }
+
+    // ---- Right-to-left interface (L10N-AR.8) ----
+
+    use egui_kittest::kittest::Queryable;
+
+    type AppHarness = egui_kittest::Harness<'static, WordApp>;
+
+    /// The whole window on the sample document, `width` wide, in `code`, on the Home tab.
+    fn app_harness(width: f32, code: &str) -> AppHarness {
+        let app = WordApp::new(Session::new(wordcraft_engine::sample::sample_document()), crate::Services::default());
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(width, 600.0)).build_ui_state(
+            |ui, app: &mut WordApp| {
+                let ctx = ui.ctx().clone();
+                app.logic(&ctx);
+                app.ui(ui);
+            },
+            app,
+        );
+        set_lang(&mut h, code);
+        h
+    }
+
+    fn set_lang(h: &mut AppHarness, code: &str) {
+        h.state_mut().run("ui.language", json!({"value": code})).unwrap();
+        h.state_mut().run("ui.tab", json!({"tab": "Home"})).unwrap();
+        h.run_steps(4);
+    }
+
+    /// `s` as the interface draws it in `code`.
+    fn label(code: &str, s: &str) -> String {
+        crate::i18n::tr(crate::i18n::Lang::from_code(code).unwrap(), s).to_string()
+    }
+
+    /// Run `f` on the tab strip's button for `tab` (the topmost widget with that label).
+    fn with_tab<T>(h: &AppHarness, code: &str, tab: &str, f: impl FnOnce(&egui_kittest::Node<'_>) -> T) -> T {
+        let l = label(code, tab);
+        let node = h.query_all_by_label(&l).min_by(|a, b| a.rect().top().total_cmp(&b.rect().top())).unwrap_or_else(|| panic!("no tab {l}"));
+        f(&node)
+    }
+
+    fn tab_rect(h: &AppHarness, code: &str, tab: &str) -> Rect {
+        with_tab(h, code, tab, |n| n.rect())
+    }
+
+    /// Every group drawn in one frame: English title, rect, launcher rect.
+    fn group_rects(h: &mut AppHarness) -> Vec<(String, Rect, Option<Rect>)> {
+        crate::widgets::GROUP_RECTS.with(|g| g.borrow_mut().clear());
+        h.run_steps(1);
+        crate::widgets::GROUP_RECTS.with(|g| g.take())
+    }
+
+    fn group<'a>(groups: &'a [(String, Rect, Option<Rect>)], title: &str) -> &'a (String, Rect, Option<Rect>) {
+        groups.iter().find(|g| g.0 == title).unwrap_or_else(|| panic!("no group {title}"))
+    }
+
+    #[test]
+    fn ribbon_tabs_start_at_the_right_in_arabic() {
+        let h = app_harness(1440.0, "ar");
+        let file = tab_rect(&h, "ar", "File");
+        let home = tab_rect(&h, "ar", "Home");
+        let insert = tab_rect(&h, "ar", "Insert");
+        assert!(file.center().x > 1440.0 / 2.0, "File ({file:?}) is on the right half");
+        assert!(home.right() <= file.left() + 0.5 && file.left() - home.right() < 8.0, "Home ({home:?}) is just left of File ({file:?})");
+        assert!(insert.right() <= home.left() + 0.5, "Insert ({insert:?}) is left of Home ({home:?})");
+        for tab in ["Home", "Insert", "Layout", "Review", "Help"] {
+            let r = tab_rect(&h, "ar", tab);
+            assert!(r.right() <= file.left() + 0.5, "{tab} ({r:?}) is left of File");
+        }
+        let h = app_harness(1440.0, "en");
+        assert!(tab_rect(&h, "en", "File").center().x < tab_rect(&h, "en", "Home").center().x, "english: File is leftmost");
+    }
+
+    #[test]
+    fn ribbon_groups_flow_right_to_left() {
+        let mut h = app_harness(1440.0, "ar");
+        let groups = group_rects(&mut h);
+        let (clip, font, para) = (group(&groups, "Clipboard").1, group(&groups, "Font").1, group(&groups, "Paragraph").1);
+        assert!(clip.left() >= font.right() - 0.5, "Clipboard ({clip:?}) is right of Font ({font:?})");
+        assert!(font.left() >= para.right() - 0.5, "Font ({font:?}) is right of Paragraph ({para:?})");
+        // Each group's dialog launcher sits in its bottom-left corner.
+        for (title, r, launcher) in &groups {
+            if let Some(l) = launcher {
+                assert!(l.center().x < r.left() + 12.0, "{title}: launcher {l:?} at the left of {r:?}");
+            }
+        }
+        let mut h = app_harness(1440.0, "en");
+        let groups = group_rects(&mut h);
+        assert!(group(&groups, "Clipboard").1.right() <= group(&groups, "Font").1.left() + 0.5, "english: Clipboard is left of Font");
+        let (_, r, l) = group(&groups, "Font");
+        assert!(l.unwrap().center().x > r.right() - 12.0, "english: the launcher is at the right");
+    }
+
+    /// Review Focus 2: en → ar → en in one session leaves nothing mirrored behind.
+    #[test]
+    fn ribbon_mirrors_and_unmirrors_on_language_switch() {
+        let tab_rects = |h: &AppHarness| -> Vec<(String, Rect)> {
+            TABS.iter()
+                .filter_map(|t| h.query_all_by_label(t).min_by(|a, b| a.rect().top().total_cmp(&b.rect().top())).map(|n| (t.to_string(), n.rect())))
+                .collect()
+        };
+        let mut fresh = app_harness(1440.0, "en");
+        let want_tabs = tab_rects(&fresh);
+        let want_groups = group_rects(&mut fresh);
+        assert!(want_tabs.len() >= 10, "{want_tabs:?}");
+
+        let mut h = app_harness(1440.0, "en");
+        set_lang(&mut h, "ar");
+        assert!(tab_rect(&h, "ar", "File").center().x > 720.0, "mirrored in Arabic");
+        set_lang(&mut h, "en");
+        assert_eq!(tab_rects(&h), want_tabs, "tabs back where a fresh English window has them");
+        assert_eq!(group_rects(&mut h), want_groups, "groups back where a fresh English window has them");
+    }
+
+    /// Review Focus 4: Left/Right move focus to the visually adjacent tab.
+    #[test]
+    fn arrow_keys_follow_the_visual_order_in_rtl() {
+        for (code, expect) in [("ar", "Insert"), ("en", "File")] {
+            let mut h = app_harness(1440.0, code);
+            with_tab(&h, code, "Home", |n| n.focus());
+            h.run_steps(2);
+            assert!(with_tab(&h, code, "Home", |n| n.is_focused()), "{code}: Home has focus");
+            h.key_press(egui::Key::ArrowLeft);
+            h.run_steps(2);
+            assert!(with_tab(&h, code, expect, |n| n.is_focused()), "{code}: ArrowLeft from Home focuses {expect}");
+        }
+    }
+
+    /// Review Focus 5: a narrow Arabic window keeps the start of the ribbon (the right) in view and
+    /// hides the end of the row past the left edge, behind the left scroll cue.
+    #[test]
+    fn narrow_arabic_ribbon_collapses_from_the_left() {
+        let mut h = app_harness(800.0, "ar");
+        let groups = group_rects(&mut h);
+        let first = &groups.first().unwrap().1;
+        assert!(first.left() >= 0.0 && first.right() <= 800.0 && first.right() > 700.0, "Clipboard ({first:?}) is whole, at the right");
+        // Drawing order runs right to left; whatever is cut off is the end of the row, at the left.
+        for pair in groups.windows(2) {
+            assert!(pair[1].1.right() <= pair[0].1.left() + 0.5, "{} is left of {}", pair[1].0, pair[0].0);
+        }
+        let cut: Vec<&str> = groups.iter().filter(|g| g.1.left() < 0.0).map(|g| g.0.as_str()).collect();
+        assert!(!cut.is_empty(), "800 pt is too narrow for Home");
+        let leftmost = groups.iter().min_by(|a, b| a.1.left().total_cmp(&b.1.left())).unwrap();
+        assert_eq!(leftmost.0, groups.last().unwrap().0, "the leftmost group is the last one, the one cut off");
+        assert!(h.query_by_label(&label("ar", "Scroll ribbon left")).is_some(), "the left cue shows more");
+        assert!(h.query_by_label(&label("ar", "Scroll ribbon right")).is_none(), "nothing hidden at the right");
+        // The left cue brings the end of the row into view.
+        let left_cue = label("ar", "Scroll ribbon left");
+        for _ in 0..10 {
+            let Some(cue) = h.query_by_label(&left_cue) else { break };
+            cue.click();
+            h.run_steps(2);
+        }
+        let groups = group_rects(&mut h);
+        assert!(groups.last().unwrap().1.left() >= 0.0, "scrolled to the end: {:?}", groups.last());
+        assert!(h.query_by_label(&label("ar", "Scroll ribbon right")).is_some(), "the start is now hidden at the right");
+        // English is the mirror image.
+        let h = app_harness(800.0, "en");
+        assert!(h.query_by_label("Scroll ribbon right").is_some());
+        assert!(h.query_by_label("Scroll ribbon left").is_none());
+    }
+
+    #[test]
+    fn keytips_sit_on_their_mirrored_controls() {
+        let mut h = app_harness(1440.0, "ar");
+        h.state_mut().ui.keytips = crate::keytips::Phase::Commands;
+        h.run_steps(2);
+        let rects: Vec<(Rect, String)> = h.ctx.data(|d| d.get_temp(crate::keytips::rects_id())).unwrap_or_default();
+        assert!(rects.len() > 10, "{rects:?}");
+        for (r, l) in &rects {
+            let b = crate::keytips::badge_rect(*r, 8.0);
+            // The badge's anchor is its start edge: the right one in Arabic.
+            assert!(r.x_range().contains(b.right()) && (r.right() - b.right()) < 3.0, "{l}: badge {b:?} at the top right of {r:?}");
+        }
+        // Paste is the first control drawn, so the rightmost.
+        let paste = rects[0].0;
+        assert!(rects.iter().all(|(r, _)| r.center().x <= paste.center().x + 0.5), "Paste {paste:?} is rightmost");
     }
 
     #[test]

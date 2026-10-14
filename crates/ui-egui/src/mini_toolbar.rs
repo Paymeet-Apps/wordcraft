@@ -130,7 +130,8 @@ fn content(app: &mut WordApp, ui: &mut egui::Ui, t: &Tokens) {
     let flag = |k: &str| st.get(k).and_then(Value::as_bool).unwrap_or(false);
     let align = app.session.doc.para_at(&app.session.sel.focus).map(|p| app.session.doc.styles.resolve_para(&p.props).align).unwrap_or_default();
     let row = |ui: &mut egui::Ui, app: &mut WordApp, add: &dyn Fn(&mut egui::Ui, &mut WordApp)| {
-        ui.allocate_ui_with_layout(Vec2::new(ui.available_width(), ROW_H), Layout::left_to_right(Align::Center), |ui| {
+        // Under RTL each row starts at the bar's right edge.
+        ui.allocate_ui_with_layout(Vec2::new(ui.available_width(), ROW_H), crate::rtl::row_layout(Align::Center), |ui| {
             ui.set_min_height(ROW_H);
             add(ui, app);
         });
@@ -341,5 +342,36 @@ mod tests {
         );
         assert!((used.width() - inner.width()).abs() < 0.5, "the bar ({}) should be as wide as its controls ({})", inner.width(), used.width());
         assert!(used.min.x - inner.min.x < 0.5, "the font box starts at the bar's left edge");
+    }
+
+    /// Arabic interface: the rows start at the bar's right edge, Bold right of Italic.
+    #[test]
+    fn mini_toolbar_rows_start_at_the_right_in_arabic() {
+        use egui_kittest::kittest::Queryable;
+        use wordcraft_engine::Session;
+        let mut a = WordApp::new(Session::new(wordcraft_doc::Document::new()), Default::default());
+        a.run("text.insert", json!({"text": "The quick brown fox jumps over the lazy dog"})).unwrap();
+        a.run("select.text", json!({"text": "brown fox"})).unwrap();
+        a.run("ui.language", json!({"value": "ar"})).unwrap();
+        let mut h = egui_kittest::Harness::builder().with_size(Vec2::new(1440.0, 900.0)).build_ui_state(
+            |ui, app: &mut WordApp| {
+                let ctx = ui.ctx().clone();
+                app.logic(&ctx);
+                app.ui(ui);
+            },
+            a,
+        );
+        for _ in 0..6 {
+            h.step();
+        }
+        let [bar, used] = h.ctx.data(|d| d.get_temp::<[Rect; 2]>(shown_id())).expect("the bar is shown over a selection");
+        let inner = bar.shrink2(Vec2::new(PAD_X, PAD_Y));
+        assert!(inner.max.x - used.max.x < 0.5, "the rows start at the bar's right edge: {used:?} in {inner:?}");
+        let ar = crate::i18n::Lang::from_code("ar").unwrap();
+        let x = |s: &str| {
+            let l = crate::i18n::tr(ar, s);
+            h.query_all_by_label(l).filter(|n| inner.contains(n.rect().center())).map(|n| n.rect().center().x).next().unwrap_or_else(|| panic!("{s}"))
+        };
+        assert!(x("Bold") > x("Italic"), "Bold is right of Italic");
     }
 }

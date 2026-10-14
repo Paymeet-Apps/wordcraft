@@ -194,11 +194,17 @@ pub fn small(ui: &mut Ui, app: &mut WordApp, icon: &str, label: Option<&str>, ti
     keytip_badge(ui, r, id, tip);
     let on = enabled(app, id);
     bg(ui, r, &resp, checked, &t);
-    let ic = Rect::from_center_size(pos2(r.min.x + 12.0, r.center().y), vec2(17.0, 17.0));
+    let ic = Rect::from_center_size(pos2(crate::rtl::x(r, r.min.x + 12.0), r.center().y), vec2(17.0, 17.0));
     let (c, a) = if on { (t.icon, t.accent) } else { (t.text_disabled, t.text_disabled) };
     icons::paint(ui.painter(), ic, icon, c, a);
     if let Some(l) = label {
-        ui.painter().text(pos2(r.min.x + 24.0, r.center().y), Align2::LEFT_CENTER, l, regular(11.5), if on { t.text } else { t.text_disabled });
+        ui.painter().text(
+            pos2(crate::rtl::x(r, r.min.x + 24.0), r.center().y),
+            crate::rtl::start_align2(egui::Align::Center),
+            l,
+            regular(11.5),
+            if on { t.text } else { t.text_disabled },
+        );
     }
     let resp = tooltip(app, resp, tip, id);
     command_menu(&resp, app, id);
@@ -290,11 +296,12 @@ pub fn menu_button(
         let (r, resp) = ui.allocate_exact_size(vec2(24.0 + text_w + 10.0, 22.0), Sense::click());
         keytip_badge(ui, r, "menu", tip);
         bg(ui, r, &resp, false, &t);
-        icons::paint(ui.painter(), Rect::from_center_size(pos2(r.min.x + 12.0, r.center().y), vec2(17.0, 17.0)), icon, c, a);
+        let x = |v: f32| crate::rtl::x(r, v);
+        icons::paint(ui.painter(), Rect::from_center_size(pos2(x(r.min.x + 12.0), r.center().y), vec2(17.0, 17.0)), icon, c, a);
         if let Some(l) = label {
-            ui.painter().text(pos2(r.min.x + 24.0, r.center().y), Align2::LEFT_CENTER, l, regular(11.5), text);
+            ui.painter().text(pos2(x(r.min.x + 24.0), r.center().y), crate::rtl::start_align2(egui::Align::Center), l, regular(11.5), text);
         }
-        icons::paint(ui.painter(), Rect::from_center_size(pos2(r.max.x - 6.0, r.center().y), vec2(DROPDOWN, DROPDOWN)), "dropdown", c, c);
+        icons::paint(ui.painter(), Rect::from_center_size(pos2(x(r.max.x - 6.0), r.center().y), vec2(DROPDOWN, DROPDOWN)), "dropdown", c, c);
         resp
     };
     let resp = resp.on_hover_text(tip);
@@ -312,6 +319,8 @@ thread_local! {
     /// Groups drawn taller than [`CONTENT_H`] (title and height): their content runs into the
     /// group label below, as View › Show did with four check boxes in one column.
     pub(crate) static TALL_GROUPS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// Every group drawn, in drawing order: English title, group rect, dialog launcher rect.
+    pub(crate) static GROUP_RECTS: std::cell::RefCell<Vec<(String, Rect, Option<Rect>)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// A ribbon group: content, a centred label below and a divider on the right.
@@ -324,10 +333,13 @@ pub fn group(ui: &mut Ui, title: &str, launcher: Option<&str>, app: &mut WordApp
 pub fn group_titled(ui: &mut Ui, id_title: &str, title: &str, launcher: Option<&str>, app: &mut WordApp, add: impl FnOnce(&mut Ui, &mut WordApp)) {
     let t = Tokens::get(ui.ctx());
     let label_w = ui.ctx().fonts_mut(|f| f.layout_no_wrap(title.to_string(), regular(11.0), t.group_label).size().x);
+    // Under RTL the group starts at the row's right (its cursor) and its controls run leftwards;
+    // the dialog launcher moves to the bottom-left corner and the divider to the left side.
+    let rtl = crate::rtl::is_rtl();
     let start = ui.cursor().min;
-    let inner = ui.vertical(|ui| {
+    let inner = crate::rtl::column(ui, |ui| {
         ui.set_min_width(label_w + if launcher.is_some() { 22.0 } else { 10.0 });
-        let content = ui.allocate_ui_with_layout(vec2(ui.available_width(), CONTENT_H), egui::Layout::left_to_right(egui::Align::Min), |ui| {
+        let content = ui.allocate_ui_with_layout(vec2(ui.available_width(), CONTENT_H), crate::rtl::row_layout(egui::Align::Min), |ui| {
             ui.spacing_mut().item_spacing = vec2(1.0, 1.0);
             add(ui, app);
         });
@@ -339,11 +351,15 @@ pub fn group_titled(ui: &mut Ui, id_title: &str, title: &str, launcher: Option<&
         let _ = content;
     });
     let r = inner.response.rect;
-    let r = Rect::from_min_max(start, pos2(r.max.x, start.y + CONTENT_H + LABEL_H));
+    let left = if rtl { r.min.x } else { start.x };
+    let r = Rect::from_min_max(pos2(left, start.y), pos2(r.max.x, start.y + CONTENT_H + LABEL_H));
     let title_y = r.max.y - LABEL_H / 2.0;
     ui.painter().text(pos2(r.center().x, title_y), Align2::CENTER_CENTER, title, regular(11.0), t.group_label);
+    let launcher_rect = Rect::from_center_size(pos2(crate::rtl::x(r, r.max.x - 6.0), title_y), vec2(11.0, 11.0));
+    #[cfg(test)]
+    GROUP_RECTS.with(|g| g.borrow_mut().push((id_title.to_string(), r, launcher.map(|_| launcher_rect))));
     if let Some(cmd) = launcher {
-        let lr = Rect::from_center_size(pos2(r.max.x - 6.0, title_y), vec2(11.0, 11.0));
+        let lr = launcher_rect;
         let resp = ui.interact(lr, ui.id().with(("launch", id_title)), Sense::click());
         if resp.hovered() {
             ui.painter().rect_filled(lr.expand(2.0), 2.0, t.hover);
@@ -356,7 +372,7 @@ pub fn group_titled(ui: &mut Ui, id_title: &str, title: &str, launcher: Option<&
         }
     }
     ui.add_space(5.0);
-    let x = ui.cursor().min.x;
+    let x = if rtl { ui.cursor().max.x } else { ui.cursor().min.x };
     ui.painter().line_segment([pos2(x, start.y + 4.0), pos2(x, start.y + CONTENT_H + LABEL_H - 4.0)], Stroke::new(1.0, t.border));
     ui.add_space(6.0);
 }

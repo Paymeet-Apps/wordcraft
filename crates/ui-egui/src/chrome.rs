@@ -215,7 +215,7 @@ pub const MAC_CONTENT_LEFT: f32 = MAC_LIGHTS_LEFT + 2.0 * MAC_LIGHT_PITCH + MAC_
 /// mirror: AutoSave and the Quick Access Toolbar start at the right, search and account sit at
 /// the left end. In the status bar the page and word counts start at the right and the view
 /// buttons and zoom control sit at the left.
-fn row_centered<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerResponse<R> {
+pub(crate) fn row_centered<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerResponse<R> {
     let size = ui.available_size_before_wrap();
     ui.allocate_ui_with_layout(size, rtl::row_layout(egui::Align::Center), add)
 }

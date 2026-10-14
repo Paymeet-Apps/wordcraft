@@ -19,6 +19,31 @@ pub fn row<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     ui.allocate_ui_with_layout(size, row_layout(Align::Center), add)
 }
 
+/// `ui.vertical` whose items line up on the start edge (the right under RTL). Inside a
+/// right-to-left row a plain `ui.vertical` would land at the far left of the free space.
+pub fn column<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+    if is_rtl() { ui.scope_builder(egui::UiBuilder::new().layout(Layout::top_down(Align::Max)), add) } else { ui.vertical(add) }
+}
+
+/// Content that always lays out from the left of the free space (an egui `Grid` or `ScrollArea`),
+/// placed at the cursor of a right-to-left row: it gets a box exactly as wide as it measured last
+/// frame (a changed width discards the frame and lays it out again). English: `add(ui)` as is.
+pub fn fitted<R>(ui: &mut Ui, id_salt: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
+    if !is_rtl() {
+        return add(ui);
+    }
+    let id = ui.id().with(("rtl_fitted", id_salt));
+    let known = ui.data(|d| d.get_temp::<f32>(id));
+    let width = known.unwrap_or_else(|| ui.available_width());
+    let r = ui.allocate_ui_with_layout(vec2(width, ui.available_height()), Layout::top_down(Align::Min), add);
+    let got = r.response.rect.width();
+    if known.is_none_or(|k| (k - got).abs() > 0.5) {
+        ui.data_mut(|d| d.insert_temp(id, got));
+        ui.ctx().request_discard("rtl: fitted width changed");
+    }
+    r.inner
+}
+
 /// The start-to-end row layout: left to right, or right to left under RTL.
 /// Note: with_layout with Align::Center takes the full available height unless the caller caps it.
 pub fn row_layout(align: Align) -> Layout {
