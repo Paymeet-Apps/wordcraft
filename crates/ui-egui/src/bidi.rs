@@ -107,6 +107,12 @@ fn isolate_placeholders(s: &str) -> String {
     out
 }
 
+/// Whether `c` is in one of the Arabic blocks (Arabic, Supplement, Extended-A, Presentation
+/// Forms A and B).
+fn is_arabic_block(c: char) -> bool {
+    matches!(c, '\u{0600}'..='\u{06FF}' | '\u{0750}'..='\u{077F}' | '\u{08A0}'..='\u{08FF}' | '\u{FB50}'..='\u{FDFF}' | '\u{FE70}'..='\u{FEFF}')
+}
+
 /// The paired bracket drawn for `c` in a right-to-left run.
 fn mirrored(c: char) -> char {
     match c {
@@ -128,6 +134,12 @@ fn mirrored(c: char) -> char {
 
 /// Appends an odd-level run in the order epaint must draw it: its segments reversed, each
 /// strong-RTL segment in logical order (epaint shapes it right to left), brackets mirrored.
+///
+/// Characters in the Arabic blocks (`is_arabic_block`) join the segment before them, like
+/// NSM/ZWJ/ZWNJ, even when they are neutrals (U+060C comma, U+061B, U+061F, U+066A-066C): Inter
+/// lacks them, so epaint draws them with the Arabic face, inside the neighbouring Arabic run, and
+/// shapes that whole run right to left. Splitting them off would put them on the wrong side. The
+/// rule is by code point block, not by which face covers the character.
 fn push_rtl_run(out: &mut String, run: &str) {
     // `(start, end, is_rtl_segment)` byte ranges, in logical order.
     let mut segments: Vec<(usize, usize, bool)> = Vec::new();
@@ -135,8 +147,8 @@ fn push_rtl_run(out: &mut String, run: &str) {
         let end = i.saturating_add(c.len_utf8());
         let joins = matches!(c, '\u{200C}' | '\u{200D}') || bidi_class(c) == BidiClass::NSM;
         match segments.last_mut() {
-            Some(last) if last.2 && (is_strong_rtl(c) || joins) => last.1 = end,
-            _ => segments.push((i, end, is_strong_rtl(c))),
+            Some(last) if last.2 && (is_strong_rtl(c) || joins || is_arabic_block(c)) => last.1 = end,
+            _ => segments.push((i, end, is_strong_rtl(c) || is_arabic_block(c))),
         }
     }
     for &(start, end, rtl) in segments.iter().rev() {
@@ -356,6 +368,24 @@ mod tests {
             let _ = visual(s, true);
             let _ = visual(s, false);
         }
+    }
+
+    #[test]
+    fn arabic_block_neutrals_stay_with_their_arabic_segment() {
+        // The Arabic comma is drawn by the Arabic face inside the run of the word before it.
+        assert_eq!(visual("نعم، لا", true), "لا نعم،");
+    }
+
+    #[test]
+    fn epaint_draws_the_arabic_comma_left_of_its_word() {
+        let Some(ctx) = context() else { return };
+        let g = glyphs(&ctx, &visual("نعم، لا", true));
+        eprintln!("نعم، لا: {g:?}");
+        let xs = |cs: &[char]| g.iter().filter(|t| cs.contains(&t.0)).map(|t| t.1).collect::<Vec<f32>>();
+        let lam_alef_max = xs(&['ل', 'ا']).into_iter().fold(f32::MIN, f32::max);
+        let word_min = xs(&['ن', 'ع', 'م']).into_iter().fold(f32::MAX, f32::min);
+        let comma = x_of(&g, '،');
+        assert!(lam_alef_max < comma && comma < word_min, "{g:?}");
     }
 
     #[test]
