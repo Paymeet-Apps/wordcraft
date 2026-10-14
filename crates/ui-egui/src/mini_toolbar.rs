@@ -2,6 +2,7 @@
 //! with the most-used formatting controls. It mirrors Word's trigger (selection, not caret),
 //! position (above, clamped to the viewport, flipping below when tight) and dismissal rules.
 
+use crate::rtl::HoverText as _;
 use egui::{Align, CornerRadius, Layout, Order, Rect, Sense, Vec2, pos2};
 use serde_json::{Value, json};
 
@@ -204,7 +205,7 @@ fn highlight_menu(ui: &mut egui::Ui, app: &mut WordApp) {
             let Some(c) = h.rgb() else { continue };
             let (r, resp) = ui.allocate_exact_size(Vec2::new(18.0, 18.0), Sense::click());
             ui.painter().rect_filled(r, 2.0, egui::Color32::from_rgb(c.0, c.1, c.2));
-            if resp.on_hover_text(h.name()).clicked() {
+            if resp.rtl_hover_text(h.name()).clicked() {
                 app.canvas.last_highlight = h.ooxml().to_string();
                 let _ = app.run("format.highlight", json!({"color": h.ooxml()}));
                 ui.close();

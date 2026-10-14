@@ -330,7 +330,7 @@ fn styles(app: &mut WordApp, ui: &mut Ui) {
                     let _ = app.run("para.style", json!({"style": id}));
                     app.canvas.want_focus = true;
                 }
-                r.context_menu(|ui| {
+                crate::rtl::on_context_menu(&r, |ui| {
                     if ui.button(tl!("Modify…")).clicked() {
                         app.dialog = crate::dialogs::Dialog::modify_style(app, &id);
                         ui.close();

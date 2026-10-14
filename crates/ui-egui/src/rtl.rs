@@ -5,7 +5,9 @@
 // Used by the mirroring tasks (7-13).
 #![cfg_attr(not(test), allow(dead_code))]
 
-use egui::{Align, Align2, InnerResponse, Key, Layout, Rect, Ui, vec2};
+use egui::{
+    Align, Align2, Button, InnerResponse, IntoAtoms, Key, Layout, Popup, Rect, RectAlign, Response, RichText, Ui, Vec2, Widget as _, WidgetText, vec2,
+};
 
 /// Is the interface drawn right to left?
 pub fn is_rtl() -> bool {
@@ -93,6 +95,46 @@ pub fn grid_row<const N: usize>(ui: &mut Ui, cells: [&mut dyn FnMut(&mut Ui); N]
     ui.end_row();
 }
 
+/// A grid of `n` uniform cells, `per_row` to a row, built by `cell(ui, index)`, with `spacing`
+/// (egui's item spacing when `None`). English: exactly the `egui::Grid` (an `end_row` after every
+/// `per_row` cells). RTL: each row is a right-to-left strip, so the first cell is the right one.
+/// Use it for galleries and colour grids inside menus: egui's `Grid` always lays out from the left,
+/// and inside a right-aligned menu ([`menu_layout`]) it sized the menu to infinity (NaN rects).
+pub fn cell_grid(ui: &mut Ui, id_salt: impl egui::AsIdSalt, spacing: Option<Vec2>, per_row: usize, n: usize, mut cell: impl FnMut(&mut Ui, usize)) {
+    let per_row = per_row.max(1);
+    if !is_rtl() {
+        let mut grid = egui::Grid::new(id_salt);
+        if let Some(s) = spacing {
+            grid = grid.spacing(s);
+        }
+        grid.show(ui, |ui| {
+            for i in 0..n {
+                cell(ui, i);
+                if (i + 1) % per_row == 0 {
+                    ui.end_row();
+                }
+            }
+        });
+        return;
+    }
+    let s = spacing.unwrap_or(ui.spacing().item_spacing);
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = s.y;
+        let mut start = 0;
+        while start < n {
+            let end = start.saturating_add(per_row).min(n);
+            // Top-aligned (`row` centres on one control height; cells can be taller).
+            ui.allocate_ui_with_layout(vec2(ui.available_size_before_wrap().x, 0.0), Layout::right_to_left(Align::Min), |ui| {
+                ui.spacing_mut().item_spacing.x = s.x;
+                for i in start..end {
+                    cell(ui, i);
+                }
+            });
+            start = end;
+        }
+    });
+}
+
 /// Layout for menu items: text aligned to the start edge.
 pub fn menu_layout() -> Layout {
     Layout::top_down_justified(if is_rtl() { Align::Max } else { Align::Min })
@@ -109,6 +151,297 @@ pub fn arrow(key: Key) -> Key {
         other => other,
     }
 }
+// ---- Menus, tooltips and check boxes (L10N-AR.9) ----
+//
+// Every helper below is the stock egui call in English (same code path, so the same pixels). Under
+// RTL a menu hangs from its button's right edge and its items line up on the right, a sub-menu opens
+// to the left with its arrow (⏴) at the item's left, a shortcut sits at the item's left end, a
+// tooltip hangs from the widget's right edge with right-aligned rows, and a check box draws its box
+// right of its label.
+
+/// [`egui::Popup::menu`] for a button. RTL: the menu's right edge sits under the button's right
+/// edge (`RectAlign::BOTTOM_END`; egui still flips it when it does not fit) and items line up on the
+/// right ([`menu_layout`]).
+pub fn menu(resp: &Response) -> Popup<'static> {
+    let p = Popup::menu(resp);
+    if is_rtl() { p.layout(menu_layout()).align(RectAlign::BOTTOM_END) } else { p }
+}
+
+/// [`egui::Popup::context_menu`] (opens at the pointer on a secondary click). RTL: the menu opens
+/// to the left of the pointer, items on the right.
+pub fn context_menu(resp: &Response) -> Popup<'static> {
+    let p = Popup::context_menu(resp);
+    if is_rtl() { p.layout(menu_layout()).align(RectAlign::BOTTOM_END) } else { p }
+}
+
+/// `resp.context_menu(add)` through [`context_menu`].
+pub fn on_context_menu(resp: &Response, add: impl FnOnce(&mut Ui)) -> Option<InnerResponse<()>> {
+    context_menu(resp).show(add)
+}
+
+/// A menu item with a shortcut (`Button::new(label).shortcut_text(sc)`). RTL: the label at the
+/// right, the shortcut (weak) at the left end.
+pub fn shortcut_item<'a>(label: impl Into<WidgetText>, shortcut: impl Into<String>) -> Button<'a> {
+    let (label, shortcut) = (label.into(), shortcut.into());
+    if is_rtl() { Button::new(label).left_text(RichText::new(shortcut).weak()) } else { Button::new(label).shortcut_text(shortcut) }
+}
+
+/// A menu item led by a mark (a check mark): `Button::new((mark, label))`. RTL: the mark at the
+/// right, before the label in reading order.
+pub fn marked_item<'a>(mark: RichText, label: impl Into<WidgetText>) -> Button<'a> {
+    let label = label.into();
+    if is_rtl() { Button::new((label, mark)) } else { Button::new((mark, label)) }
+}
+
+/// `ui.menu_button`: a button opening a menu, or inside a menu a sub-menu item. RTL: the menu
+/// through [`menu`]; a sub-menu opens to the left of its item and its arrow (⏴) is at the left.
+pub fn sub_menu<'a, R>(ui: &mut Ui, atoms: impl IntoAtoms<'a>, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<Option<R>> {
+    if !is_rtl() {
+        return ui.menu_button(atoms, add);
+    }
+    if !egui::containers::menu::is_in_menu(ui) {
+        let resp = Button::new(atoms).ui(ui);
+        let inner = menu(&resp).show(add);
+        return InnerResponse::new(inner.map(|i| i.inner), resp);
+    }
+    rtl_sub_menu(ui, Button::new(atoms).left_text("⏴"), add)
+}
+
+/// egui's `SubMenuButton` + `SubMenu::show` (egui 0.36.2, MIT/Apache-2.0) with the sub-menu placed
+/// `LEFT_START` and laid out by [`menu_layout`]. egui hard-codes `RIGHT_START` there.
+fn rtl_sub_menu<R>(ui: &mut Ui, button: Button<'_>, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<Option<R>> {
+    use egui::containers::menu::{MenuConfig, MenuState, SubMenu};
+    let my_id = ui.next_auto_id();
+    let open = MenuState::from_ui(ui, |state, _| state.open_item == Some(SubMenu::id_from_widget_id(my_id)));
+    let inactive = ui.style().visuals.widgets.inactive;
+    if open {
+        ui.style_mut().visuals.widgets.inactive = ui.style().visuals.widgets.open;
+    }
+    let button_response = button.ui(ui);
+    ui.style_mut().visuals.widgets.inactive = inactive;
+
+    let frame = egui::Frame::menu(ui.style());
+    let id = SubMenu::id_from_widget_id(button_response.id);
+    let (open_item, menu_id) = MenuState::from_ui(ui, |state, stack| (state.open_item, stack.id));
+    let menu_config = MenuConfig::find(ui);
+    // `MenuConfig::bar` is private; `find` returns the enclosing menu's config, which is not a bar.
+    let Some(menu_root_response) = ui.ctx().read_response(menu_id) else {
+        return InnerResponse::new(None, button_response);
+    };
+    let hover_pos = ui.ctx().pointer_hover_pos();
+    let menu_rect = menu_root_response.rect - frame.total_margin();
+    let is_hovering_menu = hover_pos.is_some_and(|pos| ui.ctx().layer_id_at(pos) == Some(menu_root_response.layer_id) && menu_rect.contains(pos));
+    let is_any_open = open_item.is_some();
+    let mut is_open = open_item == Some(id);
+    let was_open = is_open;
+    let mut set_open = None;
+    let button_rect = button_response.rect.expand2(ui.style().spacing.item_spacing / 2.0);
+    let is_hovered = hover_pos.is_some_and(|pos| button_rect.contains(pos));
+    let clicked = button_response.clicked();
+    let clicked_by_pointer = button_response.clicked_by(egui::PointerButton::Primary);
+    if ui.is_enabled() && is_open && clicked && !clicked_by_pointer {
+        set_open = Some(false);
+        is_open = false;
+    }
+    if ui.is_enabled() && ((!was_open && clicked) || (is_hovered && !is_any_open)) {
+        set_open = Some(true);
+        is_open = true;
+        MenuState::from_id(ui.ctx(), menu_id, |state| state.open_item = None);
+    }
+    let gap = frame.total_margin().sum().x / 2.0 + 2.0;
+    let mut response = button_response.clone();
+    response.interact_rect = response.interact_rect.expand2(vec2(0.0, frame.total_margin().sum().y / 2.0));
+    let close_behavior = menu_config.close_behavior;
+    let popup_response = Popup::from_response(&response)
+        .id(id)
+        .open(is_open)
+        .align(RectAlign::LEFT_START)
+        .layout(menu_layout())
+        .gap(gap)
+        .style(menu_config.style.clone())
+        .frame(frame)
+        .close_behavior(egui::PopupCloseBehavior::IgnoreClicks)
+        .info(egui::UiStackInfo::new(egui::UiKind::Menu).with_tag_value(MenuConfig::MENU_CONFIG_TAG, menu_config))
+        .show(|ui| {
+            if button_response.clicked() || button_response.is_pointer_button_down_on() {
+                ui.ctx().move_to_top(ui.layer_id());
+            }
+            add(ui)
+        });
+    if let Some(popup_response) = &popup_response {
+        let is_deepest = MenuState::is_deepest_open_sub_menu(ui.ctx(), id);
+        let clicked_outside = is_deepest && popup_response.response.clicked_elsewhere() && menu_root_response.clicked_elsewhere();
+        let clicked_inside = is_deepest
+            && !button_response.clicked()
+            && response.ctx.input(|i| i.pointer.any_click())
+            && hover_pos.is_some_and(|pos| popup_response.response.interact_rect.contains(pos));
+        let click_close = match close_behavior {
+            egui::PopupCloseBehavior::CloseOnClick => clicked_outside || clicked_inside,
+            egui::PopupCloseBehavior::CloseOnClickOutside => clicked_outside,
+            egui::PopupCloseBehavior::IgnoreClicks => false,
+        };
+        if click_close {
+            set_open = Some(false);
+            ui.close();
+        }
+        let towards = ui.input(|i| i.pointer.is_moving_towards_rect(&popup_response.response.rect));
+        if towards {
+            ui.request_repaint();
+        }
+        if is_open && !is_hovered && !popup_response.response.contains_pointer() && !towards && is_hovering_menu {
+            set_open = Some(false);
+        }
+        if popup_response.response.should_close() {
+            ui.close();
+        }
+        if ui.will_parent_close() {
+            ui.data_mut(|data| data.remove_by_type::<MenuState>());
+        }
+    }
+    if let Some(set_open) = set_open {
+        MenuState::from_id(ui.ctx(), menu_id, |state| state.open_item = set_open.then_some(id));
+    }
+    InnerResponse::new(popup_response.map(|r| r.inner), button_response)
+}
+
+/// [`egui::Tooltip::for_enabled`]. RTL: the tooltip hangs from the widget's right edge and its rows
+/// line up on the right.
+pub fn tooltip(resp: &Response) -> egui::Tooltip<'static> {
+    let mut t = egui::Tooltip::for_enabled(resp);
+    if is_rtl() {
+        t = t.layout(Layout::top_down(Align::Max));
+        t.popup = t.popup.align(RectAlign::BOTTOM_END);
+    }
+    t
+}
+
+/// `resp.on_hover_ui(add)` through [`tooltip`].
+pub fn on_hover_ui(resp: Response, add: impl FnOnce(&mut Ui)) -> Response {
+    tooltip(&resp).show(add);
+    resp
+}
+
+/// `resp.on_hover_text(text)`. RTL: the text wraps with [`wrapped_label`], so a long tip reads from
+/// its top line down, every row ending at the right.
+pub fn hover_text(resp: Response, text: impl Into<String>) -> Response {
+    let text = text.into();
+    if !is_rtl() {
+        return resp.on_hover_text(text);
+    }
+    on_hover_ui(resp, |ui| {
+        // As `on_hover_text`: keep Area auto-sizing from shrinking the tooltip.
+        ui.set_max_width(ui.spacing().tooltip_width);
+        wrapped_label(ui, &text, |s| RichText::new(s));
+    })
+}
+
+/// [`hover_text`] as a method, for `resp.on_hover_text(…)` chains: `resp.rtl_hover_text(…)`.
+pub trait HoverText {
+    fn rtl_hover_text(self, text: impl Into<String>) -> Response;
+}
+
+impl HoverText for Response {
+    fn rtl_hover_text(self, text: impl Into<String>) -> Response {
+        hover_text(self, text)
+    }
+}
+
+/// A label that wraps at the available width. English: `ui.label(style(text))`.
+///
+/// RTL: `text` is in draw order, as the catalog and `fmt` give it. Text that fits on one line is
+/// drawn as it is. Longer text is turned back into logical order (`bidi::visual` undoes itself for
+/// interface strings: run order reverses again), broken into rows by `bidi::wrap` and drawn one
+/// row under the other, right-aligned, so the first line of the sentence is on top. egui's own
+/// wrapping would cut the draw-order string and put the end of the sentence first.
+pub fn wrapped_label(ui: &mut Ui, text: &str, style: impl Fn(&str) -> RichText) -> Response {
+    if !is_rtl() {
+        return ui.label(style(text));
+    }
+    let width = ui.available_width();
+    let measure =
+        |s: &str| WidgetText::from(style(s)).into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::FontSelection::Default).size().x;
+    let rows =
+        if measure(text) <= width { vec![text.to_string()] } else { crate::bidi::wrap(&crate::bidi::visual(text, true), true, width, measure) };
+    column(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for row in rows {
+            ui.add(egui::Label::new(style(&row)).wrap_mode(egui::TextWrapMode::Extend));
+        }
+    })
+    .response
+}
+
+/// A check box that reads in the interface direction. English: exactly `ui.checkbox`. RTL: the box
+/// is right of its label (drawn as egui draws its own, mirrored). Dialogs use it too.
+pub fn checkbox<'a>(ui: &mut Ui, checked: &'a mut bool, atoms: impl IntoAtoms<'a>) -> Response {
+    if !is_rtl() {
+        return ui.checkbox(checked, atoms);
+    }
+    let id = ui.next_auto_id();
+    let state = ui.ctx().read_response(id).map(|r| r.widget_state()).unwrap_or_default();
+    let egui::widget_style::CheckboxStyle { check_size, checkbox_frame, checkbox_size, frame, check_stroke, text_style } =
+        ui.style().checkbox_style(&egui::widget_style::Classes::default(), state);
+    let mut min_size = Vec2::splat(ui.spacing().interact_size.y);
+    min_size.y = min_size.y.max(checkbox_size);
+    let icon_size = vec2(checkbox_size, checkbox_size.max(min_size.y));
+    let rect_id = egui::Id::new("wc::rtl_checkbox");
+    let mut atoms = atoms.into_atoms();
+    let text = atoms.text().map(String::from);
+    atoms.push_right(egui::Atom::custom(rect_id, icon_size));
+    let mut prepared = egui::AtomLayout::new(atoms).sense(egui::Sense::click()).min_size(min_size).frame(frame).allocate(ui);
+    if prepared.response.clicked() {
+        *checked = !*checked;
+        prepared.response.mark_changed();
+    }
+    let on = *checked;
+    prepared.response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), on, text.as_deref().unwrap_or("")));
+    if !ui.is_rect_visible(prepared.response.rect) {
+        return prepared.response;
+    }
+    prepared.fallback_text_color = text_style.color;
+    let shown = prepared.paint(ui);
+    if let Some(rect) = shown.rect(rect_id) {
+        let big = Rect::from_center_size(egui::pos2(rect.right() - checkbox_size / 2.0, rect.center().y), Vec2::splat(checkbox_size));
+        let small = Rect::from_center_size(big.center(), Vec2::splat(check_size));
+        ui.painter().add(egui::epaint::RectShape::new(
+            big.expand(checkbox_frame.inner_margin.left.into()),
+            checkbox_frame.corner_radius,
+            checkbox_frame.fill,
+            checkbox_frame.stroke,
+            egui::StrokeKind::Inside,
+        ));
+        if on {
+            // The check mark is a tick, not a direction: drawn as in English.
+            ui.painter().add(egui::Shape::line(
+                vec![
+                    egui::pos2(small.left(), small.center().y),
+                    egui::pos2(small.center().x, small.bottom()),
+                    egui::pos2(small.right(), small.top()),
+                ],
+                check_stroke,
+            ));
+        }
+    }
+    shown.response
+}
+
+/// Test helper: the screen rect of every text shape drawn last frame whose text is `text`.
+#[cfg(test)]
+pub(crate) fn text_rects(out: &egui::FullOutput, text: &str) -> Vec<Rect> {
+    fn walk(shape: &egui::Shape, text: &str, found: &mut Vec<Rect>) {
+        match shape {
+            egui::Shape::Text(t) if t.galley.text() == text => found.push(t.galley.rect.translate(t.pos.to_vec2())),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, text, found)),
+            _ => {}
+        }
+    }
+    let mut found = Vec::new();
+    for s in &out.shapes {
+        walk(&s.shape, text, &mut found);
+    }
+    found
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,6 +583,107 @@ mod tests {
             h.get_by_label("L").rect().center().y
         });
         (y, height.get())
+    }
+
+    // ---- Menus, tooltips and check boxes (L10N-AR.9) ----
+
+    const LONG_TIP: &str = "يعرض هذا الزر قائمة الأوامر التي تنسق النص المحدد في المستند الحالي بسرعة وسهولة ويمكنك تخصيصها من خيارات الشريط في أي وقت تريده دون أن تفقد أي شيء من عملك أو من تنسيقه";
+
+    #[test]
+    fn rtl_tooltips_wrap_with_the_first_line_on_top() {
+        with_lang("ar", || {
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(900.0, 500.0)).build_ui(|ui| {
+                let r = ui.button("B");
+                hover_text(r, crate::bidi::visual(LONG_TIP, true));
+            });
+            h.ctx.all_styles_mut(|s| {
+                s.interaction.tooltip_delay = 0.0;
+                s.interaction.show_tooltips_only_when_still = false;
+            });
+            h.run();
+            h.get_by_label("B").hover();
+            h.run_steps(4);
+            let style = h.ctx.global_style();
+            let font = egui::TextStyle::Body.resolve(&style);
+            let measure = |s: &str| h.ctx.fonts_mut(|f| f.layout_no_wrap(s.to_string(), font.clone(), egui::Color32::WHITE).size().x);
+            // The catalog stores the tip in draw order; the rows are the logical text wrapped.
+            let rows = crate::bidi::wrap(LONG_TIP, true, style.spacing.tooltip_width, measure);
+            assert_eq!(crate::bidi::visual(&crate::bidi::visual(LONG_TIP, true), true), LONG_TIP, "draw order converts back");
+            assert!(rows.len() >= 2, "the tip is long enough to wrap: {rows:?}");
+            let rects: Vec<Rect> = rows
+                .iter()
+                .map(|row| {
+                    let found = text_rects(h.output(), row);
+                    assert_eq!(found.len(), 1, "row {row:?} drawn once");
+                    found[0]
+                })
+                .collect();
+            for pair in rects.windows(2) {
+                assert!(pair[0].bottom() <= pair[1].top() + 0.5, "the first line is on top: {rects:?}");
+                assert!((pair[0].right() - pair[1].right()).abs() <= 1.0, "rows end at the same right edge: {rects:?}");
+            }
+        });
+    }
+
+    /// (check box rect, label text rect) for one check box labelled "Ruler".
+    fn checkbox_rects(code: &str, ours: bool) -> (Rect, Rect) {
+        with_lang(code, || {
+            let mut h = egui_kittest::Harness::new_ui(|ui| {
+                let mut on = true;
+                if ours {
+                    checkbox(ui, &mut on, "Ruler");
+                } else {
+                    ui.checkbox(&mut on, "Ruler");
+                }
+            });
+            h.run();
+            let node = h.get_by_label("Ruler").rect();
+            let text = text_rects(h.output(), "Ruler");
+            (node, text[0])
+        })
+    }
+
+    #[test]
+    fn rtl_checkbox_puts_the_box_right_of_its_label() {
+        let (node, text) = checkbox_rects("ar", true);
+        assert!(text.right() <= node.right() - 14.0 && text.left() <= node.left() + 1.0, "arabic: label {text:?} at the left of {node:?}");
+        let (node, text) = checkbox_rects("en", true);
+        assert!(text.left() >= node.left() + 14.0, "english: label {text:?} after the box in {node:?}");
+        assert_eq!(checkbox_rects("en", true), checkbox_rects("en", false), "english: exactly the stock check box");
+    }
+
+    /// (sub-menu button rect, sub-menu item rect) with the sub-menu open.
+    fn sub_menu_rects(code: &str) -> (Rect, Rect) {
+        with_lang(code, || {
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(800.0, 400.0)).build_ui(|ui| {
+                ui.add_space(20.0);
+                ui.horizontal(|ui| {
+                    ui.add_space(300.0);
+                    let r = ui.button("Open");
+                    menu(&r).show(|ui| {
+                        let _ = ui.button("First");
+                        sub_menu(ui, "More", |ui| {
+                            let _ = ui.button("Inner");
+                        });
+                    });
+                });
+            });
+            h.run();
+            h.get_by_label("Open").click();
+            h.run_steps(3);
+            assert!(egui::Popup::is_any_open(&h.ctx), "{code}: the menu opened");
+            h.get_by_label_contains("More").hover();
+            h.run_steps(4);
+            (h.get_by_label_contains("More").rect(), h.get_by_label("Inner").rect())
+        })
+    }
+
+    #[test]
+    fn sub_menus_open_toward_the_end_side() {
+        let (more, inner) = sub_menu_rects("ar");
+        assert!(inner.right() <= more.left() + 1.0, "arabic: the sub-menu {inner:?} opens left of {more:?}");
+        let (more, inner) = sub_menu_rects("en");
+        assert!(inner.left() >= more.right() - 1.0, "english: the sub-menu {inner:?} opens right of {more:?}");
     }
 
     #[test]

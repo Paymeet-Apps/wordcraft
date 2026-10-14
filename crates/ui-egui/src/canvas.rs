@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
+use crate::rtl::HoverText as _;
 use egui::{Color32, Pos2, Rect, Sense, Stroke, TextureHandle, Ui, pos2, vec2};
 use serde_json::json;
 use wordcraft_doc::{PartKind, Pos, StoryRef};
@@ -1327,7 +1328,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
     } else {
         None
     };
-    let menu = egui::Popup::menu(&resp).open_memory(open);
+    let menu = crate::rtl::menu(&resp).open_memory(open);
     let menu = match app.canvas.context_menu_at {
         Some(p) => menu.at_position(p),
         None => menu.at_pointer_fixed(),
@@ -1371,13 +1372,13 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
         ui.scope_builder(egui::UiBuilder::new().max_rect(footer), |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    if ui.add_enabled(app.canvas.scroll_offset.x > 0.5, egui::Button::new("‹")).on_hover_text(tl!("Previous Page")).clicked() {
+                    if ui.add_enabled(app.canvas.scroll_offset.x > 0.5, egui::Button::new("‹")).rtl_hover_text(tl!("Previous Page")).clicked() {
                         turn_read_page(app, -1.0);
                     }
                     ui.label(format!("{} / {}", current.min(total.max(1)), total));
                     if ui
                         .add_enabled(app.canvas.scroll_offset.x + 0.5 < app.canvas.scroll_max.x, egui::Button::new("›"))
-                        .on_hover_text(tl!("Next Page"))
+                        .rtl_hover_text(tl!("Next Page"))
                         .clicked()
                     {
                         turn_read_page(app, 1.0);
@@ -2332,7 +2333,7 @@ fn margin_handle(app: &mut WordApp, ui: &Ui, edge: MarginEdge, zone: Rect, to_pt
     let cursor =
         if matches!(edge, MarginEdge::Left | MarginEdge::Right) { egui::CursorIcon::ResizeHorizontal } else { egui::CursorIcon::ResizeVertical };
     let r = ui.interact(zone, ui.id().with(("ruler_margin", edge)), Sense::drag()).on_hover_cursor(cursor);
-    let r = if r.dragged() { r } else { r.on_hover_text(tl!(edge.label())) };
+    let r = if r.dragged() { r } else { r.rtl_hover_text(tl!(edge.label())) };
     if r.dragged()
         && let Some(pp) = r.interact_pointer_pos()
     {
@@ -2464,7 +2465,7 @@ fn context_menu(app: &mut WordApp, ui: &mut Ui) {
     let item = |ui: &mut Ui, app: &mut WordApp, label: &str, id: &str, params: serde_json::Value| {
         let sc = crate::widgets::shortcut_text(app, id);
         let on = crate::widgets::enabled(app, id);
-        if ui.add_enabled(on, egui::Button::new(tl!(label)).shortcut_text(sc)).clicked() {
+        if ui.add_enabled(on, crate::rtl::shortcut_item(tl!(label), sc)).clicked() {
             let _ = app.run(id, params);
             ui.close();
         }
@@ -2493,7 +2494,7 @@ fn context_menu(app: &mut WordApp, ui: &mut Ui) {
         ui.separator();
     }
     item(ui, app, "Cut", "edit.cut", json!({}));
-    if ui.add(egui::Button::new(tl!("Copy")).shortcut_text(crate::widgets::shortcut_text(app, "edit.copy"))).clicked() {
+    if ui.add(crate::rtl::shortcut_item(tl!("Copy"), crate::widgets::shortcut_text(app, "edit.copy"))).clicked() {
         if let Ok(r) = app.run("edit.copy", json!({})) {
             crate::system_clipboard::put_result(app, ui.ctx(), &r);
         }
@@ -2502,7 +2503,7 @@ fn context_menu(app: &mut WordApp, ui: &mut Ui) {
     item(ui, app, "Paste", "edit.paste", json!({}));
     ui.separator();
     if let Some(syn) = app.canvas.context_synonyms.clone().and_then(|v| v.as_array().cloned()).filter(|a| !a.is_empty()) {
-        ui.menu_button(tl!("Synonyms"), |ui| {
+        crate::rtl::sub_menu(ui, tl!("Synonyms"), |ui| {
             for w in syn.iter().filter_map(|x| x.as_str()) {
                 if ui.button(w).clicked() {
                     let _ = app.run("select.word", json!({}));
@@ -2542,13 +2543,13 @@ fn context_menu(app: &mut WordApp, ui: &mut Ui) {
         item(ui, app, "Size and Crop…", "ui.tab", json!({"tab": "Picture Format"}));
     }
     if object {
-        ui.menu_button(tl!("Wrap Text"), |ui| crate::ribbon::wrap_text_items(ui, app));
+        crate::rtl::sub_menu(ui, tl!("Wrap Text"), |ui| crate::ribbon::wrap_text_items(ui, app));
     }
     if app.session.sel.focus.path.cell().is_some() {
         // The table's items follow what is selected, as in Word (2019, Windows).
         let pick = table_pick(&app.session);
         ui.separator();
-        ui.menu_button(tl!("Insert"), |ui| {
+        crate::rtl::sub_menu(ui, tl!("Insert"), |ui| {
             item(ui, app, "Insert Columns to the Left", "table.insertColumnLeft", json!({}));
             item(ui, app, "Insert Columns to the Right", "table.insertColumnRight", json!({}));
             item(ui, app, "Insert Rows Above", "table.insertRowAbove", json!({}));
@@ -2571,7 +2572,7 @@ fn context_menu(app: &mut WordApp, ui: &mut Ui) {
             item(ui, app, "Distribute Columns", "table.distributeColumns", json!({}));
         }
         if pick == TablePick::Table {
-            ui.menu_button(tl!("AutoFit"), |ui| {
+            crate::rtl::sub_menu(ui, tl!("AutoFit"), |ui| {
                 item(ui, app, "AutoFit Contents", "table.autofit", json!({"mode": "contents"}));
                 item(ui, app, "AutoFit Window", "table.autofit", json!({"mode": "window"}));
                 item(ui, app, "Fixed Column Width", "table.autofit", json!({"mode": "fixed"}));

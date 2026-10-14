@@ -204,8 +204,6 @@ pub(crate) fn visual(s: &str, base_rtl: bool) -> Cow<'_, str> {
 /// every line with [`visual`]. egui would otherwise wrap the already-reordered string and put the
 /// logical end of the text on top. A word wider than `width` sits alone on its line; empty text
 /// gives no lines; a `width` of zero or less puts one word on each line.
-// Used by the RTL label call sites (later tasks).
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn wrap(text: &str, base_rtl: bool, width: f32, measure: impl Fn(&str) -> f32) -> Vec<String> {
     let mut lines: Vec<String> = Vec::new();
     for paragraph in text.split('\n') {

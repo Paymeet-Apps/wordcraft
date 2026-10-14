@@ -1250,26 +1250,23 @@ pub fn table_grid_picker(ui: &mut Ui, app: &mut WordApp) {
     });
     let mut new_hover = (0, 0);
     let mut clicked = None;
-    egui::Grid::new("tgp").spacing(vec2(2.0, 2.0)).show(ui, |ui| {
-        for r in 1..=8 {
-            for c in 1..=10 {
-                let (rect, resp) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::click());
-                let on = r <= hover.0 && c <= hover.1;
-                ui.painter().rect(
-                    rect,
-                    1.0,
-                    if on { t.checked } else { t.input },
-                    egui::Stroke::new(1.0, if on { t.accent } else { t.border_strong }),
-                    egui::StrokeKind::Inside,
-                );
-                if resp.hovered() {
-                    new_hover = (r, c);
-                }
-                if resp.clicked() {
-                    clicked = Some((r, c));
-                }
-            }
-            ui.end_row();
+    // Right to left (the Insert › Table menu) column 1 is the right one (`rtl::cell_grid`).
+    crate::rtl::cell_grid(ui, "tgp", Some(vec2(2.0, 2.0)), 10, 80, |ui, i| {
+        let (r, c) = (i / 10 + 1, i % 10 + 1);
+        let (rect, resp) = ui.allocate_exact_size(vec2(16.0, 16.0), Sense::click());
+        let on = r <= hover.0 && c <= hover.1;
+        ui.painter().rect(
+            rect,
+            1.0,
+            if on { t.checked } else { t.input },
+            egui::Stroke::new(1.0, if on { t.accent } else { t.border_strong }),
+            egui::StrokeKind::Inside,
+        );
+        if resp.hovered() {
+            new_hover = (r, c);
+        }
+        if resp.clicked() {
+            clicked = Some((r, c));
         }
     });
     ui.data_mut(|d| d.insert_temp(id, new_hover));

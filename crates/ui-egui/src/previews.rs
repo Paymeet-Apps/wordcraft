@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::rtl::HoverText as _;
 use egui::{Rect, Response, Sense, Stroke, TextureHandle, Ui, pos2, vec2};
 use serde_json::{Value, json};
 use wordcraft_doc::props::CharProps;
@@ -553,7 +554,7 @@ pub fn style_gallery(app: &mut WordApp, ui: &mut Ui, state: &Value) {
         let label_pos = pos2(r.center().x - galley.size().x / 2.0, r.max.y - 9.0 - galley.size().y / 2.0);
         ui.painter().with_clip_rect(r).galley(label_pos, galley, t.text);
         // Right-click a tile: the same style actions as the Styles pane.
-        resp.context_menu(|ui| {
+        crate::rtl::on_context_menu(&resp, |ui| {
             if ui.button(tl!("Update to Match Selection")).clicked() {
                 let _ = app.run("styles.updateToMatch", json!({"style": id}));
                 ui.close();
@@ -563,7 +564,7 @@ pub fn style_gallery(app: &mut WordApp, ui: &mut Ui, state: &Value) {
                 ui.close();
             }
         });
-        if resp.on_hover_text(name).clicked() {
+        if resp.rtl_hover_text(name).clicked() {
             let _ = app.run("para.style", json!({"style": id}));
         }
     }
@@ -622,7 +623,7 @@ pub fn style_set_gallery(app: &mut WordApp, ui: &mut Ui) {
             let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2((ir.width() / sz.x).min(1.0), (ir.height() / sz.y).min(1.0)));
             ui.painter().image(h.id(), ir, uv, preview_tint(&t, false));
         }
-        if resp.on_hover_text(format!("Style set: {name}")).clicked() {
+        if resp.rtl_hover_text(format!("Style set: {name}")).clicked() {
             let _ = app.run("design.styleSet", json!({"name": name}));
         }
     }

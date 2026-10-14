@@ -1,5 +1,6 @@
 //! Title bar (Quick Access Toolbar, title, search, account) and status bar.
 
+use crate::rtl::HoverText as _;
 use egui::{Align2, Rect, Sense, Stroke, Ui, pos2, vec2};
 use serde_json::json;
 use wordcraft_doc::StoryRef;
@@ -17,7 +18,7 @@ fn qat_button(ui: &mut Ui, app: &mut WordApp, icon: &str, tip: &str, id: &str, e
     let c = if enabled { t.icon } else { t.text_disabled };
     icons::paint(ui.painter(), Rect::from_center_size(r.center(), vec2(16.0, 16.0)), icon, c, if enabled { t.accent } else { c });
     let sc = crate::widgets::shortcut_text(app, id);
-    let resp = resp.on_hover_text(if sc.is_empty() { tip.to_string() } else { format!("{tip} ({sc})") });
+    let resp = resp.rtl_hover_text(if sc.is_empty() { tip.to_string() } else { crate::widgets::with_shortcut(tip, &sc) });
     if resp.clicked() && enabled {
         let _ = app.run(id, json!({}));
     }
@@ -70,8 +71,8 @@ fn quick_access(ui: &mut Ui, app: &mut WordApp) {
         ui.painter().rect_filled(r, 4.0, t.hover);
     }
     icons::paint(ui.painter(), Rect::from_center_size(r.center(), vec2(16.0, 16.0)), "more", t.icon, t.accent);
-    let resp = resp.on_hover_text(tl!("Customize Quick Access Toolbar"));
-    egui::Popup::menu(&resp).show(|ui| {
+    let resp = resp.rtl_hover_text(tl!("Customize Quick Access Toolbar"));
+    crate::rtl::menu(&resp).show(|ui| {
         ui.set_min_width(220.0);
         qat_menu(ui, app);
     });
@@ -111,8 +112,8 @@ fn undo_list_button(ui: &mut Ui, app: &mut WordApp, enabled: bool) {
     }
     let c = if enabled { t.icon } else { t.text_disabled };
     icons::paint(ui.painter(), Rect::from_center_size(r.center(), vec2(9.0, 9.0)), "dropdown", c, c);
-    let resp = resp.on_hover_text(tl!("Undo History"));
-    egui::Popup::menu(&resp).show(|ui| undo_list(ui, app));
+    let resp = resp.rtl_hover_text(tl!("Undo History"));
+    crate::rtl::menu(&resp).show(|ui| undo_list(ui, app));
 }
 
 /// The Undo list (#701): recent steps, newest first. Hovering a row highlights it and every newer
@@ -176,7 +177,7 @@ pub(crate) fn qat_menu(ui: &mut Ui, app: &mut WordApp) {
         let on = app.session.ribbon.qat().contains(&id);
         let mark = egui::RichText::new("✓");
         let mark = if on { mark } else { mark.color(egui::Color32::TRANSPARENT) };
-        if ui.add(egui::Button::new((mark, label)).selected(on)).clicked() {
+        if ui.add(crate::rtl::marked_item(mark, label).selected(on)).clicked() {
             let key = if on { "qatRemove" } else { "qatAdd" };
             let _ = app.run("tools.customizeRibbon", json!({ key: id }));
         }
@@ -263,7 +264,7 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
                 let tip = block
                     .as_ref()
                     .map_or_else(|| tl!("AutoSave saves every change to the file (needs a saved document)").to_string(), |b| b.reason());
-                if resp.on_hover_text(tip).clicked() {
+                if resp.rtl_hover_text(tip).clicked() {
                     match block {
                         None => {
                             let _ = app.run("file.autosave", json!({}));
@@ -285,7 +286,7 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
                     ui.painter().circle_filled(r.center(), control_h / 2.0 - 1.0, t.accent);
                     let initials: String = app.session.user_initials().chars().take(2).collect();
                     ui.painter().text(r.center(), Align2::CENTER_CENTER, initials, semibold(10.5), t.on_accent);
-                    resp.on_hover_text(format!("{} — set your name in File › Options", app.session.author));
+                    resp.rtl_hover_text(format!("{} — set your name in File › Options", app.session.author));
                     ui.add_space(8.0);
                     if app.ui.show_discord {
                         let (r, resp) = ui.allocate_exact_size(vec2(84.0, 22.0), Sense::click());
@@ -304,7 +305,7 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
                             medium(11.5),
                             t.on_accent,
                         );
-                        if resp.on_hover_text(tl!("Join the ArtCraft community on Discord")).clicked() {
+                        if resp.rtl_hover_text(tl!("Join the ArtCraft community on Discord")).clicked() {
                             let _ = app.run("ui.discord", json!({}));
                         }
                         ui.add_space(8.0);
@@ -336,9 +337,9 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
                     }
                     let tip = match crate::widgets::shortcut_text(app, "tools.search") {
                         k if k.is_empty() => tl!("Search").to_string(),
-                        k => format!("{} ({k})", tl!("Search")),
+                        k => crate::widgets::with_shortcut(tl!("Search"), &k),
                     };
-                    if resp.on_hover_text(tip).clicked() {
+                    if resp.rtl_hover_text(tip).clicked() {
                         let _ = app.run("tools.search", json!({}));
                     }
                     let end_edge = if rtl::is_rtl() { ui.min_rect().max.x } else { ui.min_rect().min.x };
@@ -413,7 +414,7 @@ pub fn status_bar(app: &mut WordApp, ui: &mut Ui) {
                     resp
                 };
                 if st(ui, &crate::i18n::fmt(tl!("Page {page} of {pages}"), &[("page", &page.to_string()), ("pages", &l.pages.len().to_string())]))
-                    .on_hover_text(tl!("Go To (⌘⌥G)"))
+                    .rtl_hover_text(tl!("Go To (⌘⌥G)"))
                     .clicked()
                 {
                     let _ = app.run("ui.dialog", json!({"name": "goto"}));
@@ -434,15 +435,15 @@ pub fn status_bar(app: &mut WordApp, ui: &mut Ui) {
                 }
                 // The language at the caret; a click sets the proofing language (Review › Language).
                 let lang = crate::ribbon::caret_language(app);
-                let resp = st(ui, &lang).on_hover_text(tl!("Language"));
-                egui::Popup::menu(&resp).show(|ui| {
+                let resp = st(ui, &lang).rtl_hover_text(tl!("Language"));
+                crate::rtl::menu(&resp).show(|ui| {
                     ui.set_min_width(200.0);
                     crate::ribbon::language_menu(ui, app);
                 });
                 if app.session.doc.settings.track_changes {
                     st(ui, tl!("Track Changes: On"));
                 }
-                if app.session.prefs.overtype && st(ui, tl!("Overtype")).on_hover_text(tl!("Click to switch back to inserting")).clicked() {
+                if app.session.prefs.overtype && st(ui, tl!("Overtype")).rtl_hover_text(tl!("Click to switch back to inserting")).clicked() {
                     let _ = app.run("text.overtype", json!({"value": false}));
                 }
                 if let Some((msg, at)) = &app.status_msg
@@ -521,7 +522,7 @@ pub fn status_bar(app: &mut WordApp, ui: &mut Ui) {
                         }
                         icons::paint(ui.painter(), r.shrink(3.0), icon, t.icon, t.accent);
                         resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, on, name));
-                        if resp.on_hover_text(name).clicked() {
+                        if resp.rtl_hover_text(name).clicked() {
                             let _ = app.run(id, json!({}));
                         }
                     }
@@ -565,7 +566,7 @@ fn small_icon(ui: &mut Ui, icon: &str, tip: &str) -> bool {
         ui.painter().rect_filled(r, 3.0, t.hover);
     }
     icons::paint(ui.painter(), r.shrink(3.0), icon, t.icon, t.accent);
-    resp.on_hover_text(tip).clicked()
+    resp.rtl_hover_text(tip).clicked()
 }
 
 impl WordApp {

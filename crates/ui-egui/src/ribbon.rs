@@ -1,5 +1,6 @@
 //! The ribbon: tab strip and every tab's groups. Each control runs a command by id.
 
+use crate::rtl::HoverText as _;
 use egui::{Align2, Rect, Sense, Stroke, Ui, pos2, vec2};
 use serde_json::{Value, json};
 
@@ -41,7 +42,7 @@ fn reading_toolbar(app: &mut WordApp, ui: &mut Ui, t: Tokens) {
                     Some(v) if v <= 350.0 => "Wide",
                     _ => "Page",
                 };
-                ui.menu_button(format!("{}: {}", tl!("Column width"), tl!(active)), |ui| {
+                crate::rtl::sub_menu(ui, format!("{}: {}", tl!("Column width"), tl!(active)), |ui| {
                     for (name, value) in [("Auto", "auto"), ("Narrow", "narrow"), ("Medium", "medium"), ("Wide", "wide"), ("Page", "page")] {
                         if ui.selectable_label(active == name, tl!(name)).clicked() {
                             let _ = app.run("view.readColumnWidth", json!({"value": value}));
@@ -51,7 +52,7 @@ fn reading_toolbar(app: &mut WordApp, ui: &mut Ui, t: Tokens) {
                 });
                 ui.separator();
                 let pct = (app.session.view.read_zoom * 100.0).round() as u32;
-                ui.menu_button(format!("{}: {pct}%", tl!("Text size")), |ui| {
+                crate::rtl::sub_menu(ui, format!("{}: {pct}%", tl!("Text size")), |ui| {
                     for percent in [75, 90, 100, 110, 125, 150] {
                         if ui.selectable_label(pct == percent, format!("{percent}%")).clicked() {
                             let _ = app.run("view.readTextSize", json!({"value": percent}));
@@ -62,7 +63,7 @@ fn reading_toolbar(app: &mut WordApp, ui: &mut Ui, t: Tokens) {
                 ui.separator();
                 let spacing = app.session.view.read_line_spacing;
                 let label = spacing.map_or_else(|| tl!("Document").to_owned(), |v| format!("{v}×"));
-                ui.menu_button(format!("{}: {}", tl!("Line spacing"), label), |ui| {
+                crate::rtl::sub_menu(ui, format!("{}: {}", tl!("Line spacing"), label), |ui| {
                     if ui.selectable_label(spacing.is_none(), tl!("Document")).clicked() {
                         let _ = app.run("view.readLineSpacing", json!({"value": "document"}));
                         ui.close();
@@ -228,7 +229,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                     if resp.double_clicked() && tab != "File" {
                         let _ = app.run("ui.collapseRibbon", json!({}));
                     }
-                    resp.context_menu(|ui| crate::widgets::customize_menu_items(ui, app));
+                    crate::rtl::on_context_menu(&resp, |ui| crate::widgets::customize_menu_items(ui, app));
                 }
                 ui.with_layout(crate::rtl::end_layout(egui::Align::Center), |ui| {
                     // No document open (#1129): nothing to share, edit or comment on.
@@ -254,14 +255,14 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                         medium(12.0),
                         t.on_accent,
                     );
-                    if resp.on_hover_text(tl!("Export a copy to share (PDF, Word document)")).clicked() {
+                    if resp.rtl_hover_text(tl!("Export a copy to share (PDF, Word document)")).clicked() {
                         let _ = app.run("ui.backstage", json!({"value": true, "page": "export"}));
                     }
                     ui.add_space(6.0);
                     let track = app.session.doc.settings.track_changes;
                     let mode =
                         crate::widgets::icon_text_menu_button(ui, "pencil", if track { tl!("Reviewing") } else { tl!("Editing") }, regular(12.0));
-                    egui::Popup::menu(&mode).show(|ui| {
+                    crate::rtl::menu(&mode).show(|ui| {
                         if ui.selectable_label(!track, tl!(tl!("Editing — edit the document directly"))).clicked() {
                             let _ = app.run("review.trackChanges", json!({"value": false}));
                             ui.close();
@@ -294,7 +295,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                 ui.disable();
             }
             let bg = ui.interact(ui.max_rect(), ui.id().with("ribbon_background"), Sense::click());
-            bg.context_menu(|ui| crate::widgets::customize_menu_items(ui, app));
+            crate::rtl::on_context_menu(&bg, |ui| crate::widgets::customize_menu_items(ui, app));
             let entry = user_tabs.iter().find(|e| e.name == app.ui.tab);
             // Under RTL the row starts at the right and overflows past the left edge. egui scrolls
             // from the left, so the row is laid out right to left in a box as wide as it measured
@@ -438,7 +439,7 @@ fn two_lines(label: &str) -> String {
 
 /// A chevron over a ribbon edge that is also a button; `true` on the frame it is clicked.
 fn edge_cue(ui: &mut Ui, rect: Rect, glyph: &str, hint: &str, t: &Tokens) -> bool {
-    let resp = ui.interact(rect, ui.id().with(glyph), Sense::click()).on_hover_text(hint);
+    let resp = ui.interact(rect, ui.id().with(glyph), Sense::click()).rtl_hover_text(hint);
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, hint));
     let ink = if resp.hovered() { t.text } else { t.text_dim };
     ui.painter().rect_filled(rect, 0.0, t.ribbon);
@@ -489,7 +490,7 @@ pub(crate) fn mi(ui: &mut Ui, app: &mut WordApp, label: &str, id: &str, params: 
 fn mi_text(ui: &mut Ui, app: &mut WordApp, text: &str, id: &str, params: Value) {
     let sc = crate::widgets::shortcut_text(app, id);
     let enabled = crate::widgets::enabled(app, id);
-    let resp = ui.add_enabled(enabled, egui::Button::new(text).shortcut_text(sc).min_size(vec2(200.0, 0.0)));
+    let resp = ui.add_enabled(enabled, crate::rtl::shortcut_item(text, sc).min_size(vec2(200.0, 0.0)));
     if resp.clicked() {
         crate::widgets::run_from_ribbon(app, id, params);
         ui.close();
@@ -554,7 +555,7 @@ fn mi_check(ui: &mut Ui, app: &mut WordApp, label: &str, checked: bool, id: &str
     let mark = egui::RichText::new("✓");
     let mark = if checked { mark } else { mark.color(egui::Color32::TRANSPARENT) };
     let enabled = crate::widgets::enabled(app, id);
-    let resp = ui.add_enabled(enabled, egui::Button::new((mark, tl!(label))).selected(checked).min_size(vec2(200.0, 0.0)));
+    let resp = ui.add_enabled(enabled, crate::rtl::marked_item(mark, tl!(label)).selected(checked).min_size(vec2(200.0, 0.0)));
     if resp.clicked() {
         crate::widgets::run_from_ribbon(app, id, params);
         ui.close();
@@ -680,9 +681,9 @@ fn home(app: &mut WordApp, ui: &mut Ui) {
                     let theme = app.session.doc.settings.theme_colors.clone();
                     crate::wordart_menus::style_gallery(ui, app, "format.textEffects");
                     ui.separator();
-                    ui.menu_button(tl!("Text Fill"), |ui| crate::wordart_menus::fill_menu(ui, app, &theme));
+                    crate::rtl::sub_menu(ui, tl!("Text Fill"), |ui| crate::wordart_menus::fill_menu(ui, app, &theme));
                     let outline = crate::wordart_menus::current_outline(app);
-                    ui.menu_button(tl!("Text Outline"), |ui| crate::wordart_menus::outline_menu(ui, app, &theme, outline));
+                    crate::rtl::sub_menu(ui, tl!("Text Outline"), |ui| crate::wordart_menus::outline_menu(ui, app, &theme, outline));
                     crate::wordart_menus::effects_menu(ui, app, &theme, false);
                     ui.separator();
                     mi(ui, app, "Outline", "format.outline", json!({}));
@@ -694,19 +695,16 @@ fn home(app: &mut WordApp, ui: &mut Ui) {
                 let hl = app.canvas.last_highlight.clone();
                 split(ui, app, "highlight", "Text Highlight Color", "format.highlight", json!({"color": hl}), false, None, |ui, app| {
                     let grid = wordcraft_doc::props::Highlight::ALL;
-                    egui::Grid::new("hl").spacing(vec2(3.0, 3.0)).show(ui, |ui| {
-                        for (i, h) in grid.iter().enumerate().skip(1) {
-                            let c = h.rgb().unwrap_or(wordcraft_doc::Rgb::WHITE);
-                            let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::click());
-                            ui.painter().rect_filled(r, 2.0, egui::Color32::from_rgb(c.0, c.1, c.2));
-                            if resp.on_hover_text(h.name()).clicked() {
-                                app.canvas.last_highlight = h.ooxml().to_string();
-                                let _ = app.run("format.highlight", json!({"color": h.ooxml()}));
-                                ui.close();
-                            }
-                            if i % 5 == 0 {
-                                ui.end_row();
-                            }
+                    // The first entry is "none" (the No Color item below).
+                    crate::rtl::cell_grid(ui, "hl", Some(vec2(3.0, 3.0)), 5, grid.len().saturating_sub(1), |ui, i| {
+                        let Some(h) = grid.get(i + 1) else { return };
+                        let c = h.rgb().unwrap_or(wordcraft_doc::Rgb::WHITE);
+                        let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::click());
+                        ui.painter().rect_filled(r, 2.0, egui::Color32::from_rgb(c.0, c.1, c.2));
+                        if resp.rtl_hover_text(h.name()).clicked() {
+                            app.canvas.last_highlight = h.ooxml().to_string();
+                            let _ = app.run("format.highlight", json!({"color": h.ooxml()}));
+                            ui.close();
                         }
                     });
                     mi(ui, app, "No Color", "format.highlight", json!({"color": "none"}));
@@ -873,7 +871,7 @@ fn insert(app: &mut WordApp, ui: &mut Ui) {
             let drawing = app.canvas.table_tool == Some(crate::table_pen::TableTool::Draw);
             mi_check(ui, app, "Draw Table", drawing, "table.draw", json!({}));
             mi(ui, app, "Convert Text to Table…", "table.fromText", json!({}));
-            ui.menu_button(tl!("Quick Tables"), |ui| {
+            crate::rtl::sub_menu(ui, tl!("Quick Tables"), |ui| {
                 mi(ui, app, "Tabular List", "table.quick", json!({"kind": "tabular"}));
                 mi(ui, app, "Matrix", "table.quick", json!({"kind": "matrix"}));
                 mi(ui, app, "Calendar", "table.quick", json!({"kind": "calendar"}));
@@ -989,20 +987,18 @@ fn insert(app: &mut WordApp, ui: &mut Ui) {
                 }
             }
             items.truncate(30);
-            egui::Grid::new("syms").show(ui, |ui| {
-                for (i, (c, font)) in items.iter().enumerate() {
-                    let b = ui.button(egui::RichText::new(c).size(16.0));
-                    let b = if font.is_empty() { b } else { b.on_hover_text(font) };
-                    if b.clicked() {
-                        let params = if font.is_empty() { json!({"char": c}) } else { json!({"char": c, "font": font}) };
-                        if app.run("insert.symbol", params).is_ok() {
-                            crate::dialogs_insert::remember_symbol(app, c, font);
-                        }
-                        ui.close();
+            // Right to left the rows are strips, not grid columns: equal widths keep them aligned.
+            let min = if crate::rtl::is_rtl() { vec2(30.0, 0.0) } else { egui::Vec2::ZERO };
+            crate::rtl::cell_grid(ui, "syms", None, 6, items.len(), |ui, i| {
+                let Some((c, font)) = items.get(i) else { return };
+                let b = ui.add(egui::Button::new(egui::RichText::new(c).size(16.0)).min_size(min));
+                let b = if font.is_empty() { b } else { b.rtl_hover_text(font) };
+                if b.clicked() {
+                    let params = if font.is_empty() { json!({"char": c}) } else { json!({"char": c, "font": font}) };
+                    if app.run("insert.symbol", params).is_ok() {
+                        crate::dialogs_insert::remember_symbol(app, c, font);
                     }
-                    if i % 6 == 5 {
-                        ui.end_row();
-                    }
+                    ui.close();
                 }
             });
             ui.separator();
@@ -1121,11 +1117,11 @@ fn gallery_pen(ui: &mut Ui, app: &mut WordApp, i: usize, pen: wordcraft_engine::
         InkTool::Highlighter => "Highlighter",
     });
     let size = crate::i18n::fmt(tl!("{n} pt"), &[("n", &pen.width.to_string())]);
-    let resp = resp.on_hover_text(format!("{kind}: {size}, #{}", pen.color.hex()));
+    let resp = resp.rtl_hover_text(format!("{kind}: {size}, #{}", pen.color.hex()));
     if resp.clicked() {
         let _ = app.run(pen_command(pen.kind), json!({"color": pen.color.hex(), "width": pen.width}));
     }
-    resp.context_menu(|ui| {
+    crate::rtl::on_context_menu(&resp, |ui| {
         if ui.button(tl!("Remove Pen")).clicked() {
             let _ = app.run("draw.removePen", json!({"index": i}));
             ui.close();
@@ -1402,7 +1398,7 @@ fn wrap_menu(ui: &mut Ui, app: &mut WordApp) {
             mi_check(ui, app, l, wrap == w, "arrange.wrap", json!({"wrap": v}));
         }
         ui.separator();
-        ui.menu_button(tl!("Wrap Text Sides"), |ui| {
+        crate::rtl::sub_menu(ui, tl!("Wrap Text Sides"), |ui| {
             for (l, s, v) in [
                 ("Both Sides", WrapText::BothSides, "bothSides"),
                 ("Left Only", WrapText::Left, "left"),
@@ -1757,21 +1753,21 @@ fn view(app: &mut WordApp, ui: &mut Ui) {
         // Three rows fill the group's height; a fourth check box would run into its label.
         stack(ui, |ui| {
             let mut r = v.ruler;
-            if ui.checkbox(&mut r, tl!("Ruler")).changed() {
+            if crate::rtl::checkbox(ui, &mut r, tl!("Ruler")).changed() {
                 let _ = app.run("view.ruler", json!({"value": r}));
             }
             let mut g = v.gridlines;
-            if ui.checkbox(&mut g, tl!("Gridlines")).changed() {
+            if crate::rtl::checkbox(ui, &mut g, tl!("Gridlines")).changed() {
                 let _ = app.run("view.gridlines", json!({"value": g}));
             }
             let mut n = v.nav_pane;
-            if ui.checkbox(&mut n, tl!("Navigation Pane")).changed() {
+            if crate::rtl::checkbox(ui, &mut n, tl!("Navigation Pane")).changed() {
                 let _ = app.run("view.navigationPane", json!({"value": n}));
             }
         });
         stack(ui, |ui| {
             let mut w = v.hide_white_space;
-            if ui.checkbox(&mut w, tl!("Hide White Space")).changed() {
+            if crate::rtl::checkbox(ui, &mut w, tl!("Hide White Space")).changed() {
                 let _ = app.run("view.hideWhiteSpace", json!({"value": w}));
             }
         });
@@ -1857,11 +1853,11 @@ fn outlining(app: &mut WordApp, ui: &mut Ui) {
             ui.add_space(3.0);
             crate::widgets::row(ui, |ui| {
                 let mut f = !o.hide_formatting;
-                if ui.checkbox(&mut f, tl!("Show Text Formatting")).changed() {
+                if crate::rtl::checkbox(ui, &mut f, tl!("Show Text Formatting")).changed() {
                     let _ = app.run("outline.showFormatting", json!({ "value": f }));
                 }
                 let mut first = o.first_line_only;
-                if ui.checkbox(&mut first, tl!("Show First Line Only")).changed() {
+                if crate::rtl::checkbox(ui, &mut first, tl!("Show First Line Only")).changed() {
                     let _ = app.run("outline.firstLineOnly", json!({ "value": first }));
                 }
             });
@@ -1915,7 +1911,7 @@ fn smart_art_design(app: &mut WordApp, ui: &mut Ui) {
                     };
                     ui.painter().rect(r, 3.0, fill, Stroke::new(1.0, if on { t.accent } else { t.border }), egui::StrokeKind::Inside);
                     crate::dialogs_smart_art::preview(ui.painter(), r.shrink(2.0), layout, g.colors, &theme, t.text_dim);
-                    if resp.on_hover_text(tl!(layout.label())).clicked() && !on {
+                    if resp.rtl_hover_text(tl!(layout.label())).clicked() && !on {
                         let _ = app.run("smartArt.layout", json!({"layout": layout.id()}));
                     }
                     if k % 4 == 3 {
@@ -1930,7 +1926,8 @@ fn smart_art_design(app: &mut WordApp, ui: &mut Ui) {
             for colors in SmartArtColors::ALL {
                 let on = g.colors == colors;
                 let resp = ui.add(egui::Button::new(crate::dialogs_smart_art::colors_label(colors)).selected(on).min_size(vec2(200.0, 24.0)));
-                let sw = Rect::from_min_size(pos2(resp.rect.right() - 74.0, resp.rect.center().y - 6.0), vec2(66.0, 12.0));
+                let sw =
+                    crate::rtl::rect(resp.rect, Rect::from_min_size(pos2(resp.rect.right() - 74.0, resp.rect.center().y - 6.0), vec2(66.0, 12.0)));
                 crate::dialogs_smart_art::swatches(ui.painter(), sw, colors, &theme);
                 if resp.clicked() {
                     let _ = app.run("smartArt.colors", json!({"variant": colors.id()}));
@@ -2014,7 +2011,7 @@ fn shape_format(app: &mut WordApp, ui: &mut Ui) {
                 mi(ui, app, "No Color", "shape.outline", json!({"color": null}));
                 crate::colors::menu(ui, app, &theme, Target::cmd("shape.outline"));
                 ui.separator();
-                ui.menu_button(tl!("Weight"), |ui| {
+                crate::rtl::sub_menu(ui, tl!("Weight"), |ui| {
                     let color = stroke.unwrap_or(wordcraft_doc::Rgb::BLACK).hex();
                     for w in [0.25, 0.5, 0.75, 1.0, 1.5, 2.25, 3.0, 4.5, 6.0] {
                         mi(ui, app, &format!("{w} pt"), "shape.outline", json!({"color": color, "width": w}));
@@ -2032,7 +2029,7 @@ fn shape_format(app: &mut WordApp, ui: &mut Ui) {
             menu_button(ui, app, "canvas", Some("Drawing\nCanvas"), "Drawing Canvas", true, "", |ui, app| {
                 mi(ui, app, "Fit", "canvas.fit", json!({}));
                 mi(ui, app, "Expand", "canvas.expand", json!({}));
-                ui.menu_button(tl!("Scale Drawing"), |ui| {
+                crate::rtl::sub_menu(ui, tl!("Scale Drawing"), |ui| {
                     for pct in [50, 75, 125, 150, 200] {
                         mi(ui, app, &format!("{pct}%"), "canvas.scale", json!({"factor": pct as f32 / 100.0}));
                     }
@@ -2129,26 +2126,26 @@ fn alt_text_group(ui: &mut Ui, app: &mut WordApp) {
 
 /// Shape Format › Shape Effects: Shadow, Glow and Soft Edges, each with presets and a "No …" entry.
 fn shape_effects_menu(ui: &mut Ui, app: &mut WordApp, theme: &[wordcraft_doc::Rgb], glow_size: Option<f32>) {
-    ui.menu_button(tl!("Shadow"), |ui| {
+    crate::rtl::sub_menu(ui, tl!("Shadow"), |ui| {
         mi(ui, app, "No Shadow", "shape.effects", json!({"shadow": null}));
         ui.separator();
         for (id, label) in wordcraft_doc::effects::SHADOW_PRESETS {
             mi(ui, app, label, "shape.effects", json!({"shadow": id}));
         }
     });
-    ui.menu_button(tl!("Glow"), |ui| {
+    crate::rtl::sub_menu(ui, tl!("Glow"), |ui| {
         mi(ui, app, "No Glow", "shape.effects", json!({"glow": null}));
         ui.separator();
         for size in [5.0, 8.0, 11.0, 18.0] {
             mi(ui, app, &format!("{size} pt"), "shape.effects", json!({"glow": size}));
         }
         ui.separator();
-        ui.menu_button(tl!("Glow Colors"), |ui| {
+        crate::rtl::sub_menu(ui, tl!("Glow Colors"), |ui| {
             let target = Target::at("shape.effects", json!({"glow": {"color": null, "size": glow_size.unwrap_or(8.0)}}), "/glow/color");
             crate::colors::menu(ui, app, theme, target);
         });
     });
-    ui.menu_button(tl!("Soft Edges"), |ui| {
+    crate::rtl::sub_menu(ui, tl!("Soft Edges"), |ui| {
         mi(ui, app, "No Soft Edges", "shape.effects", json!({"softEdge": null}));
         ui.separator();
         for r in [1.0, 2.5, 5.0, 10.0, 25.0, 50.0] {
@@ -2263,7 +2260,7 @@ fn picture_format(app: &mut WordApp, ui: &mut Ui) {
                         let _ = app.run("picture.crop", json!({"left": c[0], "top": c[1], "right": c[2], "bottom": c[3]}));
                     }
                 }
-                if ui.button(egui::RichText::new(tl!("Reset")).small()).on_hover_text(tl!("Reset Crop")).clicked() {
+                if ui.button(egui::RichText::new(tl!("Reset")).small()).rtl_hover_text(tl!("Reset Crop")).clicked() {
                     let _ = app.run("picture.crop", json!({"left": 0.0, "top": 0.0, "right": 0.0, "bottom": 0.0}));
                 }
             });
@@ -2308,7 +2305,9 @@ fn table_design(app: &mut WordApp, ui: &mut Ui) {
                     let (mut c0, mut c1) = (false, false);
                     crate::rtl::grid_row(
                         ui,
-                        [&mut |ui| c0 = ui.checkbox(&mut v0, tl!(l0)).changed(), &mut |ui| c1 = ui.checkbox(&mut v1, tl!(l1)).changed()],
+                        [&mut |ui| c0 = crate::rtl::checkbox(ui, &mut v0, tl!(l0)).changed(), &mut |ui| {
+                            c1 = crate::rtl::checkbox(ui, &mut v1, tl!(l1)).changed()
+                        }],
                     );
                     if c0 {
                         changed = Some((k0, v0));
@@ -2338,7 +2337,7 @@ fn table_design(app: &mut WordApp, ui: &mut Ui) {
         crate::rtl::fitted(ui, "table_styles", |ui| {
             scroll_strip(ui, "table_styles", 420.0, |ui| {
                 for (_, id, name) in styles {
-                    if crate::previews::table_style_tile(ui, app, &id).on_hover_text(name).clicked() {
+                    if crate::previews::table_style_tile(ui, app, &id).rtl_hover_text(name).clicked() {
                         let _ = app.run("table.style", json!({"style": id}));
                     }
                 }
@@ -2926,6 +2925,131 @@ mod tests {
         // Paste is the first control drawn, so the rightmost.
         let paste = rects[0].0;
         assert!(rects.iter().all(|(r, _)| r.center().x <= paste.center().x + 0.5), "Paste {paste:?} is rightmost");
+    }
+
+    // ---- Menus and check boxes (L10N-AR.9) ----
+
+    /// Opens Home › Font › Change Case: (button rect, menu rect, rect of the "Sentence case." text).
+    fn change_case_menu(code: &str) -> (Rect, Rect, Rect) {
+        let mut h = app_harness(1440.0, code);
+        let tip = label(code, "Change Case");
+        h.query_all_by_label(&tip).min_by(|a, b| a.rect().top().total_cmp(&b.rect().top())).unwrap_or_else(|| panic!("no {tip}")).click();
+        h.run_steps(3);
+        crate::widgets::MENU_RECTS.with(|m| m.borrow_mut().clear());
+        h.run_steps(1);
+        let (_, button, menu) =
+            crate::widgets::MENU_RECTS.with(|m| m.take()).into_iter().find(|m| m.0 == tip).unwrap_or_else(|| panic!("{code}: menu not open"));
+        let text = crate::rtl::text_rects(h.output(), &label(code, "Sentence case."));
+        (button, menu, *text.first().unwrap_or_else(|| panic!("{code}: no item text")))
+    }
+
+    #[test]
+    fn menu_items_are_right_aligned_in_arabic() {
+        // Frame margin plus button padding: the text starts this close to the menu's start edge.
+        const PAD: f32 = 14.0;
+        let (_, menu, text) = change_case_menu("ar");
+        assert!(text.right() >= menu.right() - PAD && text.right() <= menu.right(), "arabic: item {text:?} ends at the right of {menu:?}");
+        assert!(text.left() > menu.left() + 3.0 * PAD, "arabic: the item is not at the left: {text:?} in {menu:?}");
+        let (_, menu, text) = change_case_menu("en");
+        assert!(text.left() <= menu.left() + PAD && text.left() >= menu.left(), "english: item {text:?} starts at the left of {menu:?}");
+    }
+
+    #[test]
+    fn popups_open_aligned_to_their_button_end_in_arabic() {
+        let (button, menu, _) = change_case_menu("ar");
+        assert!((menu.right() - button.right()).abs() <= 1.0, "arabic: menu {menu:?} ends under the right of {button:?}");
+        assert!(menu.top() >= button.bottom() - 1.0, "arabic: the menu drops below its button");
+        let (button, menu, _) = change_case_menu("en");
+        assert!((menu.left() - button.left()).abs() <= 1.0, "english: menu {menu:?} starts under the left of {button:?}");
+    }
+
+    /// Text Effects holds sub-menus (Text Fill…): in Arabic it opens, and Text Fill's sub-menu opens
+    /// to its left.
+    #[test]
+    fn menus_with_sub_menus_open_in_arabic() {
+        for code in ["ar", "en"] {
+            let mut h = app_harness(1440.0, code);
+            let tip = label(code, "Text Effects and Typography");
+            h.query_all_by_label(&tip).min_by(|a, b| a.rect().top().total_cmp(&b.rect().top())).unwrap_or_else(|| panic!("no {tip}")).click();
+            h.run_steps(4);
+            let fill = label(code, "Text Fill");
+            let item = h.query_by_label_contains(&fill).unwrap_or_else(|| panic!("{code}: the Text Effects menu is open")).rect();
+            h.query_by_label_contains(&fill).unwrap().hover();
+            h.run_steps(4);
+            let no_fill = label(code, "No Fill");
+            let sub = h.query_by_label_contains(&no_fill).unwrap_or_else(|| panic!("{code}: Text Fill's sub-menu is open")).rect();
+            if code == "ar" {
+                assert!(sub.right() <= item.left() + 1.0, "ar: sub-menu {sub:?} left of {item:?}");
+            } else {
+                assert!(sub.left() >= item.right() - 1.0, "en: sub-menu {sub:?} right of {item:?}");
+            }
+        }
+    }
+
+    /// Every ribbon menu (menu buttons and split-button arrows, every tab) opens in Arabic. A grid
+    /// or other left-anchored content inside a right-aligned menu once sized the menu to infinity,
+    /// so Text Effects never showed (egui's debug assertion on NaN rects catches that here).
+    #[test]
+    fn every_ribbon_menu_opens_in_arabic() {
+        for code in ["ar", "en"] {
+            every_menu_opens(code);
+        }
+    }
+
+    fn every_menu_opens(code: &str) {
+        let mut h = app_harness(2560.0, code);
+        let mut closed = Vec::new();
+        let mut opened = 0;
+        for tab in TABS.iter().filter(|t| **t != "File") {
+            h.state_mut().run("ui.tab", json!({"tab": tab})).unwrap();
+            h.run_steps(3);
+            crate::widgets::MENU_OPENERS.with(|m| m.borrow_mut().clear());
+            h.run_steps(1);
+            let openers = crate::widgets::MENU_OPENERS.with(|m| m.take());
+            for (name, r) in openers.into_iter().filter(|(_, r)| r.left() >= 0.0 && r.right() <= 2560.0) {
+                let p = r.center();
+                h.input_mut().events.push(egui::Event::PointerMoved(p));
+                h.input_mut().events.push(egui::Event::PointerButton {
+                    pos: p,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Default::default(),
+                });
+                h.input_mut().events.push(egui::Event::PointerButton {
+                    pos: p,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Default::default(),
+                });
+                h.run_steps(3);
+                if egui::Popup::is_any_open(&h.ctx) {
+                    opened += 1;
+                } else {
+                    closed.push(format!("{tab} › {name}"));
+                }
+                h.key_press(egui::Key::Escape);
+                h.run_steps(2);
+            }
+        }
+        assert!(opened > 20, "{code}: only {opened} menus found");
+        assert!(closed.is_empty(), "{code}: menus that did not open: {closed:#?}");
+    }
+
+    #[test]
+    fn ribbon_check_boxes_put_the_box_right_of_the_label_in_arabic() {
+        for code in ["ar", "en"] {
+            let mut h = app_harness(1440.0, code);
+            h.state_mut().run("ui.tab", json!({"tab": "View"})).unwrap();
+            h.run_steps(4);
+            let l = label(code, "Ruler");
+            let node = h.query_by_role_and_label(egui::accesskit::Role::CheckBox, &l).unwrap_or_else(|| panic!("{code}: no Ruler")).rect();
+            let text = crate::rtl::text_rects(h.output(), &l)[0];
+            if code == "ar" {
+                assert!(text.right() <= node.right() - 14.0 && text.left() <= node.left() + 1.0, "ar: Ruler {text:?} left of its box in {node:?}");
+            } else {
+                assert!(text.left() >= node.left() + 14.0, "en: Ruler {text:?} right of its box in {node:?}");
+            }
+        }
     }
 
     #[test]
