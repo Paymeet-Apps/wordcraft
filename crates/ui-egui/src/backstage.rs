@@ -455,13 +455,17 @@ fn properties_column(app: &mut WordApp, ui: &mut Ui, info: &serde_json::Value) {
     });
 }
 
+/// "Pages: 2": a translated caption and its number, through the catalog's `{label}: {value}`, so
+/// under RTL the caption reads first (drawn right of the number).
+fn stat_line(label: &str, value: &str) -> String {
+    crate::i18n::fmt_translated(tl!("{label}: {value}"), &[("label", label), ("value", value)])
+}
+
 /// File › Info's statistics column.
 fn statistics_column(ui: &mut Ui, info: &serde_json::Value) {
     ui.label(egui::RichText::new(tl!("Statistics")).font(semibold(15.0)));
     for (l, k) in [("Pages", "pages"), ("Words", "words"), ("Paragraphs", "paragraphs"), ("Sections", "sections"), ("Comments", "comments")] {
-        let value = info.get(k).map(|v| v.to_string()).unwrap_or_default();
-        // The caption (draw order) reads first, so under RTL it is drawn right of the number.
-        ui.label(if rtl::is_rtl() { format!("{value} :{}", tl!(l)) } else { format!("{}: {value}", tl!(l)) });
+        ui.label(stat_line(tl!(l), &info.get(k).map(|v| v.to_string()).unwrap_or_default()));
     }
     // A file path is converted as it is inserted; "Not saved yet" is already in draw order.
     ui.label(match info.get("path").and_then(|v| v.as_str()) {
@@ -790,6 +794,19 @@ mod tests {
             [h.get_by_label(tr("Export")).rect(), heading, h.get_by_label(tr("Properties")).rect(), h.get_by_label(tr("Statistics")).rect(), field];
         crate::i18n::set_current(crate::i18n::Lang::EN);
         out
+    }
+
+    /// Info's statistics come from the catalog template: "Pages: 2" in English; in Arabic the
+    /// caption reads first, so in draw order the number is at the left and the caption at the right.
+    #[test]
+    fn info_statistics_read_caption_first_in_both_directions() {
+        assert_eq!(super::stat_line("Pages", "2"), "Pages: 2");
+        crate::i18n::set_current(crate::i18n::Lang::from_code("ar").unwrap());
+        let label = tl!("Pages");
+        let line = super::stat_line(label, "2");
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(line.starts_with('2') && line.ends_with(label), "arabic draw order: {line:?}");
+        assert!(line.contains(':'), "{line:?}");
     }
 
     #[test]

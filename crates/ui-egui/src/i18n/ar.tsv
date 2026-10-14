@@ -744,5 +744,6 @@
 	Zoom In	تكبير
 	Zoom Out	تصغير
 	Zotero	Zotero
+	{label}: {value}	{label}: {value}
 	{selected} of {words} words	الكلمات: {selected} من {words}
 	{words} words	الكلمات: {words}

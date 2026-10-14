@@ -333,7 +333,9 @@ pub(crate) fn handle_span(track: (f32, f32), content: f32, view: f32, offset: f3
     if !(len.is_finite() && content.is_finite() && view.is_finite() && offset.is_finite()) || len <= 0.0 || content <= 0.0 {
         return (start, len.max(0.0));
     }
-    let size = (len * (view / content)).clamp(min_len.clamp(0.0, len), len);
+    // `f32::clamp` panics on a NaN bound: a nonsensical minimum counts as none.
+    let min = if min_len.is_finite() { min_len.clamp(0.0, len) } else { 0.0 };
+    let size = (len * (view / content)).clamp(min, len);
     let max_offset = (content - view).max(0.0);
     let t = if max_offset > 0.0 { (offset / max_offset).clamp(0.0, 1.0) } else { 0.0 };
     (start + t * (len - size), size)
@@ -345,16 +347,16 @@ pub(crate) fn handle_span(track: (f32, f32), content: f32, view: f32, offset: f3
 /// 0.36's floating bars (thin until hovered; a press on the track centres the handle there; a drag
 /// moves it); the horizontal bar stays along the bottom.
 ///
-/// `offset` is this frame's scroll offset of `content`. Returns the offset a press or drag asks for
-/// (the canvas applies it next frame) and the vertical handle's rect, when there is one.
+/// `offset` is this frame's scroll offset of `content`. See [`Bars`] for what comes back.
 ///
 /// The bar drawing follows egui 0.36.2's `ScrollArea` (MIT OR Apache-2.0), Copyright (c) 2018-2021
 /// Emil Ernerfeldt.
-pub(crate) fn start_edge_bars(ui: &mut egui::Ui, id: egui::Id, inner: egui::Rect, content: Vec2, offset: Vec2) -> (Option<Vec2>, Option<egui::Rect>) {
+pub(crate) fn start_edge_bars(ui: &mut egui::Ui, id: egui::Id, inner: egui::Rect, content: Vec2, offset: Vec2) -> Bars {
     use egui::{Rect, Sense, emath::lerp};
     let style = ui.spacing().scroll;
     let mut asked = None;
     let mut thumb = None;
+    let mut busy = false;
     let hovering_view = ui.rect_contains_pointer(inner) && ui.ctx().dragged_id().is_none();
     for d in 0..2 {
         let too_large = inner.size()[d].ceil() < content[d];
@@ -370,6 +372,8 @@ pub(crate) fn start_edge_bars(ui: &mut egui::Ui, id: egui::Id, inner: egui::Rect
         let resp = ui.interact(max_bar, id.with(d), sense);
         resp.widget_info(|| egui::WidgetInfo::new(egui::WidgetType::ScrollBar));
         let active = resp.hovered() || resp.dragged();
+        // The page underneath reads raw presses too (ink, Draw Table): it must leave this one alone.
+        busy |= resp.is_pointer_button_down_on() || resp.dragged() || resp.drag_stopped() || resp.clicked();
         let width = if style.floating {
             show * lerp(style.floating_width..=full, ui.ctx().animate_bool_responsive(id.with(("wide", d)), active))
         } else {
@@ -391,8 +395,14 @@ pub(crate) fn start_edge_bars(ui: &mut egui::Ui, id: egui::Id, inner: egui::Rect
             let grab = ui.data_mut(|m| {
                 *m.get_temp_mut_or_insert_with(grab_id, || {
                     // A press on the handle holds it where it was taken; elsewhere on the track it
-                    // centres the handle under the pointer.
-                    if (start..=start + size).contains(&p[d]) { p[d] - start } else { size / 2.0 }
+                    // centres the handle under the pointer, kept inside the track (as egui does), so
+                    // a press near either end moves with the first pixel of a drag.
+                    if (start..=start + size).contains(&p[d]) {
+                        p[d] - start
+                    } else {
+                        let top = (p[d] - size / 2.0).clamp(track.0, (track.1 - size).max(track.0));
+                        p[d] - top
+                    }
                 })
             });
             let travel = track.1 - track.0 - size;
@@ -405,7 +415,7 @@ pub(crate) fn start_edge_bars(ui: &mut egui::Ui, id: egui::Id, inner: egui::Rect
                 v[d] = o;
                 asked = Some(v);
             }
-        } else {
+        } else if ui.data(|m| m.get_temp::<f32>(grab_id).is_some()) {
             ui.data_mut(|m| m.remove::<f32>(grab_id));
         }
         let rect = handle(span(o));
@@ -438,7 +448,18 @@ pub(crate) fn start_edge_bars(ui: &mut egui::Ui, id: egui::Id, inner: egui::Rect
         ui.painter().rect_filled(bar, w.corner_radius, visuals.extreme_bg_color.gamma_multiply(background_opacity));
         ui.painter().rect_filled(rect, w.corner_radius, color.gamma_multiply(handle_opacity));
     }
-    (asked, thumb)
+    Bars { asked, thumb, busy }
+}
+
+/// What [`start_edge_bars`] did this frame.
+pub(crate) struct Bars {
+    /// The scroll offset a press or drag on a bar asks for (applied next frame).
+    pub asked: Option<Vec2>,
+    /// The vertical handle's rect, when there is a vertical bar.
+    pub thumb: Option<egui::Rect>,
+    /// A bar holds the pointer (pressed, dragged, or just released or clicked): the page under it
+    /// takes no press, drag or click this frame.
+    pub busy: bool,
 }
 
 #[cfg(test)]
@@ -460,6 +481,9 @@ mod tests {
             ((0.0, 100.0), -5.0, f32::INFINITY, f32::NAN, -1.0),
             ((100.0, 0.0), 400.0, 100.0, 10.0, 12.0),
             ((0.0, 5.0), 400.0, 100.0, 10.0, 12.0),
+            ((0.0, 100.0), 400.0, 100.0, 10.0, f32::NAN),
+            ((0.0, 100.0), 400.0, 100.0, 10.0, f32::INFINITY),
+            ((0.0, 100.0), 400.0, 100.0, 10.0, f32::NEG_INFINITY),
         ] {
             let (start, len) = handle_span(track, content, view, offset, min);
             assert!(start.is_finite() && len.is_finite() && len >= 0.0, "{track:?} {content} {view} {offset} {min} -> {start} {len}");

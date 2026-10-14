@@ -1222,10 +1222,12 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
     });
     app.canvas.scroll_offset = out.state.offset;
     app.canvas.rtl_vthumb = None;
+    let mut bar_busy = false;
     if own_bars {
-        let (asked, thumb) = crate::scroll::start_edge_bars(ui, out.id.with("rtl_bars"), out.inner_rect, out.content_size, out.state.offset);
-        app.canvas.rtl_vthumb = thumb;
-        if let Some(offset) = asked {
+        let bars = crate::scroll::start_edge_bars(ui, out.id.with("rtl_bars"), out.inner_rect, out.content_size, out.state.offset);
+        app.canvas.rtl_vthumb = bars.thumb;
+        bar_busy = bars.busy;
+        if let Some(offset) = bars.asked {
             app.canvas.scroll_request = Some(offset);
             ui.ctx().request_repaint();
         }
@@ -1262,8 +1264,10 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
     app.canvas.focused = resp.has_focus();
     // Screen readers: the document under the canvas, with the caret (#488).
     crate::a11y::expose(app, ui.ctx(), resp.id, &layout, &rects, area);
-    // The buttons that start or stop middle-click scrolling don't also click the page.
-    let middle_gesture = app.canvas.auto_scroll.blocks_input();
+    // The buttons that start or stop middle-click scrolling don't also click the page, and neither
+    // does a press on WordCraft's own (right-to-left) scroll bar over it: the pen, Draw Table and
+    // text selection read the raw pointer, which the bar doesn't hide from them.
+    let middle_gesture = app.canvas.auto_scroll.blocks_input() || bar_busy;
     // Double-click the space between two pages (or the line between them) to hide or show it.
     if resp.double_clicked()
         && app.session.view.mode == wordcraft_layout::ViewMode::Print
@@ -2852,6 +2856,105 @@ mod tests {
         let thumb = thumb.unwrap();
         assert!(thumb.center().x < canvas.center().x, "arabic: the thumb ({thumb:?}) is at the left of the canvas ({canvas:?})");
         assert!(thumb.left() >= canvas.left() - 0.5 && thumb.height() > 10.0, "arabic: the thumb sits inside the canvas, a real handle");
+    }
+
+    type RtlHarness = egui_kittest::Harness<'static, WordApp>;
+
+    /// The sample document in Arabic at 300%, scrolled sideways so a page runs under the left-edge
+    /// scroll bar, with the pointer over the page: the harness and the bar's strip.
+    fn rtl_bar_harness() -> (RtlHarness, Rect) {
+        let mut a = WordApp::new(wordcraft_engine::Session::new(wordcraft_engine::sample::sample_document()), Default::default());
+        a.run("ui.language", json!({"value": "ar"})).unwrap();
+        a.run("view.zoom", json!({"value": 300})).unwrap();
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(
+            |ui, app: &mut WordApp| {
+                let ctx = ui.ctx().clone();
+                app.logic(&ctx);
+                app.ui(ui);
+            },
+            a,
+        );
+        h.run_steps(4);
+        h.state_mut().canvas.scroll_request = Some(vec2(600.0, 0.0));
+        h.run_steps(2);
+        let vp = h.state().canvas.viewport.unwrap();
+        h.hover_at(vp.center());
+        h.run_steps(4);
+        let thumb = h.state().canvas.rtl_vthumb.unwrap();
+        (h, Rect::from_x_y_ranges(thumb.x_range(), vp.y_range()))
+    }
+
+    fn press(h: &RtlHarness, p: egui::Pos2, pressed: bool) {
+        h.event(egui::Event::PointerMoved(p));
+        h.event(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() });
+    }
+
+    /// As egui's bar: a click in the track off the handle jumps so the handle centres there (kept
+    /// inside the track), and dragging from a press near either end moves from the first pixels.
+    #[test]
+    fn rtl_scroll_bar_track_click_jumps_and_drags_without_a_dead_zone() {
+        let (mut h, strip) = rtl_bar_harness();
+        let x = strip.center().x;
+        let max = h.state().canvas.scroll_max.y;
+        assert!(max > 100.0 && h.state().canvas.scroll_offset.y < 1.0, "starts at the top of a long document");
+        // A press 3 pt above the track's bottom end: the handle jumps to the bottom.
+        let p = egui::pos2(x, strip.max.y - 3.0);
+        press(&h, p, true);
+        h.run_steps(3);
+        let at_end = h.state().canvas.scroll_offset.y;
+        assert!((at_end - max).abs() < 1.0, "a click near the end jumps to it ({at_end} of {max})");
+        // Two points up: the document moves at once (a dead zone of half the handle would not).
+        h.event(egui::Event::PointerMoved(egui::pos2(x, p.y - 2.0)));
+        h.run_steps(3);
+        let moved = h.state().canvas.scroll_offset.y;
+        assert!(moved < at_end - 1.0, "the first points of the drag scroll ({moved} vs {at_end})");
+        press(&h, egui::pos2(x, p.y - 2.0), false);
+        h.run_steps(2);
+        // Near the top end: a press jumps to the top, a small drag down moves at once.
+        let p = egui::pos2(x, strip.min.y + 3.0);
+        press(&h, p, true);
+        h.run_steps(3);
+        assert!(h.state().canvas.scroll_offset.y < 1.0, "a click near the top jumps there");
+        h.event(egui::Event::PointerMoved(egui::pos2(x, p.y + 2.0)));
+        h.run_steps(3);
+        assert!(h.state().canvas.scroll_offset.y > 1.0, "the first points of the drag scroll down");
+        press(&h, egui::pos2(x, p.y + 2.0), false);
+        h.run_steps(2);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+    }
+
+    /// The left-edge bar covers the page there: a press-drag on it scrolls, and doesn't draw ink,
+    /// draw a table or move the text selection on the page underneath.
+    #[test]
+    fn rtl_scroll_bar_press_does_not_reach_the_page_tools() {
+        for tool in ["select", "pen", "table"] {
+            let (mut h, strip) = rtl_bar_harness();
+            let p = egui::pos2(strip.center().x, strip.center().y);
+            assert!(h.state().canvas.page_rects.iter().any(|r| r.contains(p)), "a page runs under the bar");
+            match tool {
+                "pen" => {
+                    h.state_mut().run("draw.pen", json!({})).unwrap();
+                }
+                "table" => h.state_mut().canvas.table_tool = Some(crate::table_pen::TableTool::Draw),
+                _ => {}
+            }
+            h.run_steps(2);
+            let (rev, sel) = (h.state().session.rev(), h.state().session.sel.clone());
+            press(&h, p, true);
+            h.run_steps(2);
+            for dy in [10.0, 30.0, 60.0] {
+                h.event(egui::Event::PointerMoved(egui::pos2(p.x, p.y + dy)));
+                h.run_steps(1);
+                assert!(h.state().canvas.ink.is_none(), "{tool}: no ink stroke starts under the bar");
+                assert!(h.state().canvas.table_stroke.is_none(), "{tool}: no table stroke starts under the bar");
+            }
+            press(&h, egui::pos2(p.x, p.y + 60.0), false);
+            h.run_steps(3);
+            assert_eq!(h.state().session.rev(), rev, "{tool}: the document is unchanged");
+            assert_eq!(h.state().session.sel, sel, "{tool}: the selection is unchanged");
+            assert!(h.state().canvas.scroll_offset.y > 1.0, "{tool}: the drag scrolled the document");
+            crate::i18n::set_current(crate::i18n::Lang::EN);
+        }
     }
 
     /// The pages themselves don't move with the interface direction: only panes and the scroll bar
