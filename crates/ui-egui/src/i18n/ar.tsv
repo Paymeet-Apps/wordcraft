@@ -13,6 +13,7 @@
 # Entries are written in logical order; the parser stores them in draw order (bidi::visual).
 # Terminology: docs/localization-ar.md. License: MIT OR Apache-2.0.
 	1.5 Line Spacing	تباعد الأسطر 1.5
+	A password is required to open this document.	مطلوب كلمة مرور لفتح هذا المستند.
 	Accept	قبول
 	Accept All Changes	قبول جميع التغييرات
 	Accessibility	إمكانية الوصول
@@ -28,7 +29,7 @@
 	Add to Style Gallery	إضافة إلى معرض الأنماط
 	Added Fonts	الخطوط المضافة
 	Address Block	كتلة العنوان
-	Adjust	ضبط
+	Adjust	تعديل
 	Advanced	متقدم
 	Advanced Find	بحث متقدم
 	Agents	الوكلاء
@@ -40,6 +41,8 @@
 	All Caps	أحرف كبيرة
 	Alt Text	نص بديل
 	Alt Text Pane	جزء النص البديل
+	Anyone can open this document. Encrypt it with a password to keep it private.	يمكن لأي شخص فتح هذا المستند. شفِّره بكلمة مرور لإبقائه خاصًا.
+	Apply	تطبيق
 	Apply Character Style	تطبيق نمط الحرف
 	Apply Style	تطبيق النمط
 	Apply Styles	تطبيق الأنماط
@@ -47,26 +50,33 @@
 	Artistic Effects	تأثيرات فنية
 	Asian Typography	الطباعة الآسيوية
 	Attach Template	إرفاق قالب
+	Author	المؤلف
 	AutoCorrect Options	خيارات التصحيح التلقائي
 	AutoFit	احتواء تلقائي
 	AutoFit Column by Double-Clicking	احتواء العمود تلقائيًا بالنقر المزدوج
 	AutoSave	حفظ تلقائي
+	AutoSave saves every change to the file (needs a saved document)	يحفظ الحفظ التلقائي كل تغيير في الملف (يتطلب مستندًا محفوظًا)
 	AutoText	نص تلقائي
 	Automatically Update Document Styles	تحديث أنماط المستند تلقائيًا
 	Backspace	مسح للخلف
 	Bibliography	قائمة المراجع
 	Blank Page	صفحة فارغة
+	Blank document	مستند فارغ
 	Bold	غامق
 	Bookmark	إشارة مرجعية
 	Border Painter	مرسمة الحدود
 	Borders	حدود
 	Break Link	قطع الارتباط
 	Breaks	فواصل
-	Bring Forward	تقديم
+	Bring Forward	إحضار للأمام
+	Browse in WordCraft…	استعراض في WordCraft…
+	Browse…	استعراض…
 	Building Block Gallery Content Control	عنصر تحكم معرض لبنات البناء
 	Bullets	تعداد نقطي
+	Cancel	إلغاء
 	Canvas Member	عضو اللوحة
 	Captions	التسميات التوضيحية
+	Category	الفئة
 	Cell Margins	هوامش الخلايا
 	Cell Size	حجم الخلية
 	Center	توسيط
@@ -76,10 +86,12 @@
 	Change Colors	تغيير الألوان
 	Change Layout	تغيير التخطيط
 	Change List Level	تغيير مستوى القائمة
+	Change Password…	تغيير كلمة المرور…
 	Change Picture	تغيير الصورة
 	Change Shape	تغيير الشكل
 	Change Structure	تغيير البنية
-	Change to Display	تغيير العرض
+	Change to Display	تحويل إلى معادلة مستقلة
+	Change to Inline	تحويل إلى معادلة ضمن السطر
 	Changes	التغييرات
 	Character Border	حد الحرف
 	Character Position	موضع الحرف
@@ -96,11 +108,12 @@
 	Check Spelling as You Type	التدقيق الإملائي أثناء الكتابة
 	Check for Errors	البحث عن الأخطاء
 	Choose List Item	اختيار عنصر من القائمة
-	Citations	الاقتباسات
-	Citations & Bibliography	الاقتباسات والمراجع
+	Citations	الاستشهادات
+	Citations & Bibliography	الاستشهادات وقائمة المراجع
 	Clear All	مسح الكل
 	Clear All Formatting	مسح كل التنسيق
 	Clear Formatting Level	مسح مستوى التنسيق
+	Click to switch back to inserting	انقر للعودة إلى الإدراج
 	Clipboard	الحافظة
 	Clipboard Items	عناصر الحافظة
 	Clipboard Pane	جزء الحافظة
@@ -114,7 +127,7 @@
 	Column Break	فاصل أعمدة
 	Column Selection	تحديد عمودي
 	Columns	أعمدة
-	Combine	دمج
+	Combine	جمع
 	Combo Box Content Control	عنصر تحكم مربع تحرير وسرد
 	Comments	التعليقات
 	Comments Pane	جزء التعليقات
@@ -142,6 +155,7 @@
 	Crop	اقتصاص
 	Cross-reference	إسناد مرجعي
 	Customize Keyboard	تخصيص لوحة المفاتيح
+	Customize Quick Access Toolbar	تخصيص شريط أدوات الوصول السريع
 	Customize Ribbon	تخصيص الشريط
 	Cut	قص
 	Dark Mode	الوضع الداكن
@@ -175,6 +189,7 @@
 	Developer	المطوّر
 	Different First Page	صفحة أولى مختلفة
 	Different Odd & Even Pages	صفحات فردية وزوجية مختلفة
+	Discord	Discord
 	Display for Review	العرض للمراجعة
 	Distribute Columns	توزيع الأعمدة
 	Distribute Rows	توزيع الصفوف
@@ -185,6 +200,8 @@
 	Document Property	خاصية المستند
 	Document Start	بداية المستند
 	Document Text	نص المستند
+	Documents you open will show up here.	ستظهر هنا المستندات التي تفتحها.
+	Don't Save	عدم الحفظ
 	Double Spacing	تباعد مزدوج
 	Double Strikethrough	يتوسطه خطان
 	Double Underline	تسطير مزدوج
@@ -204,7 +221,9 @@
 	Edit Header	تحرير الرأس
 	Edit Items	تحرير العناصر
 	Edit Recipient List	تحرير قائمة المستلمين
+	Edited	معدَّل
 	Editing	التحرير
+	Editing header/footer	تحرير الرأس/التذييل
 	Editor	المحرر
 	Effects	التأثيرات
 	Ellipsis	علامة حذف
@@ -212,6 +231,7 @@
 	Emboss	نقش بارز
 	Enclose Characters	إحاطة الأحرف
 	Encrypt with Password	تشفير بكلمة مرور
+	Encrypt with Password…	تشفير بكلمة مرور…
 	Engrave	نقش غائر
 	Enter in Equation	إدخال في المعادلة
 	Envelopes	مظاريف
@@ -255,6 +275,7 @@
 	General	عام
 	Go Back	رجوع
 	Go To	انتقال إلى
+	Go To (⌘⌥G)	انتقال إلى (⌘⌥G)
 	Greeting Line	سطر التحية
 	Gridlines	خطوط الشبكة
 	Group	تجميع
@@ -274,7 +295,7 @@
 	Highlighter	قلم التمييز
 	Home	الصفحة الرئيسية
 	Horizontal Line	خط أفقي
-	Hyphenation	الواصلة
+	Hyphenation	تقسيم الكلمات
 	Icon Color	لون الأيقونة
 	Icons	الأيقونات
 	Ignore All	تجاهل الكل
@@ -294,7 +315,7 @@
 	Insert Above	إدراج أعلى
 	Insert Below	إدراج أسفل
 	Insert Caption	إدراج تسمية توضيحية
-	Insert Citation	إدراج اقتباس
+	Insert Citation	إدراج استشهاد
 	Insert Date Field	إدراج حقل التاريخ
 	Insert Endnote	إدراج حاشية ختامية
 	Insert Footnote	إدراج حاشية سفلية
@@ -313,10 +334,12 @@
 	Inspect Document	فحص المستند
 	Inspect Styles at Selection	فحص الأنماط عند التحديد
 	Italic	مائل
+	Join the ArtCraft community on Discord	انضم إلى مجتمع ArtCraft على Discord
 	Justification	الضبط
 	Justify	ضبط
 	Keep Lines Together	إبقاء الأسطر معًا
 	Keep with Next	إبقاء مع التالي
+	Keywords	الكلمات المفتاحية
 	Labels	الملصقات
 	Language	اللغة
 	Lasso Select	تحديد بالحبل
@@ -327,6 +350,7 @@
 	Left	يسار
 	Left-to-Right Text Direction	اتجاه النص من اليسار إلى اليمين
 	Legend	وسيلة الإيضاح
+	Letter	خطاب
 	Line Break	فاصل سطر
 	Line End	نهاية السطر
 	Line Numbers	أرقام الأسطر
@@ -338,6 +362,7 @@
 	Link to Previous	ربط بالسابق
 	Links	الارتباطات
 	List Definition	تعريف القائمة
+	Location: {path}	الموقع: {path}
 	Lock Fields	قفل الحقول
 	Macros	وحدات الماكرو
 	Mailings	المراسلات
@@ -345,17 +370,19 @@
 	Manage Styles	إدارة الأنماط
 	Manual Hyphenation	وصل يدوي
 	Margins	الهوامش
-	Mark Citation	وضع علامة على اقتباس
+	Mark Citation	وضع علامة على استشهاد
 	Mark Entry	وضع علامة على مدخل
 	Match Fields	مطابقة الحقول
 	Merge	دمج
 	Merge Cells	دمج الخلايا
 	Modify Style	تعديل النمط
 	Modify Table Style	تعديل نمط الجدول
+	More Commands…	المزيد من الأوامر…
+	More templates →	المزيد من القوالب ←
 	Move Down	نقل لأسفل
 	Move Paragraph Down	نقل الفقرة لأسفل
 	Move Paragraph Up	نقل الفقرة لأعلى
-	Move Past Citation	تجاوز الاقتباس
+	Move Past Citation	تجاوز الاستشهاد
 	Move Selected Ink	نقل الحبر المحدد
 	Move Table by Dragging	نقل الجدول بالسحب
 	Move Up	نقل لأعلى
@@ -366,8 +393,6 @@
 	Multiple Pages	صفحات متعددة
 	Navigation	التنقل
 	Navigation Pane	جزء التنقل
-	Nonbreaking Hyphen	واصلة غير فاصلة
-	Nonbreaking Space	مسافة غير فاصلة
 	New	جديد
 	New Comment	تعليق جديد
 	New Paragraph	فقرة جديدة
@@ -381,14 +406,22 @@
 	Next Record	السجل التالي
 	Next Section	القسم التالي
 	Next Sentence	الجملة التالية
+	No	لا
+	No templates match your search.	لا توجد قوالب تطابق بحثك.
+	Nonbreaking Hyphen	واصلة غير فاصلة
+	Nonbreaking Space	مسافة غير فاصلة
 	Normal Style	النمط العادي
 	Normal Text	نص عادي
+	Not saved	غير محفوظ
+	Not saved yet	لم يُحفظ بعد
 	Nudge	إزاحة طفيفة
 	Numbering	ترقيم
 	Numerals	الأرقام
+	OK	موافق
 	Object	كائن
 	One Page	صفحة واحدة
 	Open	فتح
+	Open a file with WordCraft's own browser when the system file dialog doesn't appear.	افتح ملفًا بمستعرض WordCraft نفسه عندما لا يظهر مربع حوار الملفات في النظام.
 	Optional Hyphen	واصلة اختيارية
 	Options	خيارات
 	Organizer	المنظِّم
@@ -410,6 +443,7 @@
 	Page Setup	إعداد الصفحة
 	Page Up	صفحة لأعلى
 	Page Width	عرض الصفحة
+	Page {page} of {pages}	صفحة {page} من {pages}
 	Pages	الصفحات
 	Paragraph	الفقرة
 	Paragraph Details	تفاصيل الفقرة
@@ -417,6 +451,7 @@
 	Paragraph Settings	إعدادات الفقرة
 	Paragraph Spacing	تباعد الفقرات
 	Paragraph Up	فقرة لأعلى
+	Paragraphs	الفقرات
 	Paste	لصق
 	Paste All	لصق الكل
 	Paste Clipboard Item	لصق عنصر الحافظة
@@ -467,6 +502,7 @@
 	Reading Line Spacing	تباعد أسطر القراءة
 	Reading Speed	سرعة القراءة
 	Reading Text Size	حجم نص القراءة
+	Recent	المستندات الأخيرة
 	Recolor Selected Ink	تغيير لون الحبر المحدد
 	Record Macro	تسجيل ماكرو
 	Recover Unsaved Documents	استرداد المستندات غير المحفوظة
@@ -482,6 +518,7 @@
 	Remove Footer	إزالة التذييل
 	Remove Header	إزالة الرأس
 	Remove Hyperlink	إزالة الارتباط التشعبي
+	Remove Password	إزالة كلمة المرور
 	Remove Pen	إزالة القلم
 	Remove Space After Paragraph	إزالة المسافة بعد الفقرة
 	Remove Table of Contents	إزالة جدول المحتويات
@@ -494,6 +531,7 @@
 	Replace Document Text	استبدال نص المستند
 	Replay	إعادة التشغيل
 	Reply	رد
+	Report	تقرير
 	Research	بحث معرفي
 	Researcher	الباحث
 	Reset	إعادة تعيين
@@ -502,7 +540,7 @@
 	Reset Paragraph Formatting	إعادة تعيين تنسيق الفقرة
 	Reset Picture	إعادة تعيين الصورة
 	Resize Table by Dragging	تغيير حجم الجدول بالسحب
-	Resolve	حل
+	Resolve	حل التعليق
 	Restart at 1	إعادة البدء من 1
 	Restrict Editing	تقييد التحرير
 	Review	مراجعة
@@ -517,12 +555,18 @@
 	Rows & Columns	الصفوف والأعمدة
 	Ruler	المسطرة
 	Rules	قواعد
+	Résumé	سيرة ذاتية
 	Save	حفظ
 	Save As	حفظ باسم
+	Save a copy in another format. Printing goes through a PDF you can print from any viewer.	احفظ نسخة بصيغة أخرى. تتم الطباعة عبر ملف PDF يمكنك طباعته من أي عارض.
 	Save as Template	حفظ كقالب
+	Saved	محفوظ
 	Scale Drawing	تحجيم الرسم
 	Search	بحث
+	Search commands and help	البحث في الأوامر والمساعدة
+	Search for templates	البحث عن القوالب
 	Section Properties	خصائص القسم
+	Sections	الأقسام
 	Select	تحديد
 	Select All	تحديد الكل
 	Select Cell	تحديد خلية
@@ -556,7 +600,7 @@
 	Shape Effects	تأثيرات الشكل
 	Shape Fill	تعبئة الشكل
 	Shape Format	تنسيق الشكل
-	Shape Outline	مخطط الشكل
+	Shape Outline	حد الشكل
 	Shape Styles	أنماط الشكل
 	Shapes	الأشكال
 	Share	مشاركة
@@ -585,7 +629,7 @@
 	Signature Line	سطر التوقيع
 	Single Spacing	تباعد مفرد
 	Size	الحجم
-	Skip Citations and Bibliography	تخطي الاقتباسات والمراجع
+	Skip Citations and Bibliography	تخطي الاستشهادات وقائمة المراجع
 	Small Caps	أحرف كبيرة صغيرة
 	SmartArt	SmartArt
 	SmartArt Design	تصميم SmartArt
@@ -599,15 +643,18 @@
 	Split Table	تقسيم الجدول
 	Spreadsheet Table	جدول بيانات
 	Start Mail Merge	بدء دمج المراسلات
+	Statistics	الإحصاءات
 	Stop Reading	إيقاف القراءة
 	Strikethrough	يتوسطه خط
 	Structure Actions	إجراءات البنية
 	Structures	البنى
+	Studio handbook (sample)	دليل الاستوديو (نموذج)
 	Style	النمط
 	Style Inspector	مفتش الأنماط
 	Style Set	مجموعة أنماط
 	Styles	الأنماط
 	Styles Pane	جزء الأنماط
+	Subject	الموضوع
 	Subscript	منخفض
 	Superscript	مرتفع
 	Switch Modes	تبديل الأوضاع
@@ -633,12 +680,13 @@
 	Text Effects	تأثيرات النص
 	Text Fill	تعبئة النص
 	Text Highlight Color	لون تمييز النص
-	Text Outline	مخطط النص
+	Text Outline	حد النص
 	Text Pane	جزء النص
 	Text from File	نص من ملف
 	Theme List	قائمة السمات
 	Themes	السمات
 	Thesaurus	مرادفات
+	Title	العنوان الرئيسي
 	Title Bar	شريط العنوان
 	Toggle Check Box	تبديل خانة الاختيار
 	Toggle Field Codes	تبديل رموز الحقول
@@ -646,6 +694,7 @@
 	Tools	الأدوات
 	Track Changes	تتبع التغييرات
 	Track Changes Options	خيارات تتبع التغييرات
+	Track Changes: On	تتبع التغييرات: مفعّل
 	Tracking	التتبع
 	Trademark Sign	علامة تجارية
 	Transform	تحويل شكلي
@@ -654,9 +703,12 @@
 	Type Text	كتابة نص
 	Type in Equation	كتابة في المعادلة
 	Underline	تسطير
+	Underline Words Only	تسطير الكلمات فقط
 	Undo	تراجع
+	Undo 1 Action	التراجع عن إجراء واحد
 	Undo Actions	التراجع عن الإجراءات
 	Undo History	سجل التراجع
+	Undo {n} Actions	التراجع عن الإجراءات: {n}
 	Ungroup	فك التجميع
 	Unlink Fields	فك ارتباط الحقول
 	Unlock Fields	فتح قفل الحقول
@@ -676,72 +728,21 @@
 	Views	طرق العرض
 	Watermark	علامة مائية
 	Web Layout	تخطيط ويب
-	Widow/Orphan Control	التحكم في الأسطر اليتيمة
+	Widow/Orphan Control	التحكم في الأسطر الأرملة واليتيمة
 	Window	نافذة
 	Word Count	عدد الكلمات
 	Word Left	كلمة إلى اليسار
 	Word Right	كلمة إلى اليمين
 	WordArt	WordArt
 	WordArt Styles	أنماط WordArt
+	Words	الكلمات
 	Wrap Text	التفاف النص
 	Wrap Text Sides	جوانب التفاف النص
 	Write & Insert Fields	كتابة وإدراج الحقول
+	Yes	نعم
 	Zoom	تكبير/تصغير
 	Zoom In	تكبير
 	Zoom Out	تصغير
 	Zotero	Zotero
-	A password is required to open this document.	مطلوب كلمة مرور لفتح هذا المستند.
-	Anyone can open this document. Encrypt it with a password to keep it private.	يمكن لأي شخص فتح هذا المستند. شفِّره بكلمة مرور لإبقائه خاصًا.
-	AutoSave saves every change to the file (needs a saved document)	يحفظ الحفظ التلقائي كل تغيير في الملف (يتطلب مستندًا محفوظًا)
-	Browse in WordCraft…	استعراض في WordCraft…
-	Browse…	استعراض…
-	Change Password…	تغيير كلمة المرور…
-	Click to switch back to inserting	انقر للعودة إلى الإدراج
-	Customize Quick Access Toolbar	تخصيص شريط أدوات الوصول السريع
-	Discord	Discord
-	Documents you open will show up here.	ستظهر هنا المستندات التي تفتحها.
-	Edited	معدَّل
-	Editing header/footer	تحرير الرأس/التذييل
-	Encrypt with Password…	تشفير بكلمة مرور…
-	Go To (⌘⌥G)	انتقال إلى (⌘⌥G)
-	Join the ArtCraft community on Discord	انضم إلى مجتمع ArtCraft على Discord
-	Location: {path}	الموقع: {path}
-	More Commands…	المزيد من الأوامر…
-	More templates →	المزيد من القوالب ←
-	No templates match your search.	لا توجد قوالب تطابق بحثك.
-	Not saved	غير محفوظ
-	Not saved yet	لم يُحفظ بعد
-	Open a file with WordCraft's own browser when the system file dialog doesn't appear.	افتح ملفًا بمستعرض WordCraft نفسه عندما لا يظهر مربع حوار الملفات في النظام.
-	Recent	الأخيرة
-	Remove Password	إزالة كلمة المرور
-	Save a copy in another format. Printing goes through a PDF you can print from any viewer.	احفظ نسخة بصيغة أخرى. تتم الطباعة عبر ملف PDF يمكنك طباعته من أي عارض.
-	Saved	محفوظ
-	Search commands and help	البحث في الأوامر والمساعدة
-	Search for templates	البحث عن القوالب
-	Statistics	الإحصاءات
-	Track Changes: On	تتبع التغييرات: مفعّل
-	Undo 1 Action	التراجع عن إجراء واحد
-	Undo {n} Actions	التراجع عن الإجراءات: {n}
 	{selected} of {words} words	الكلمات: {selected} من {words}
 	{words} words	الكلمات: {words}
-	Page {page} of {pages}	صفحة {page} من {pages}
-	Title	العنوان
-	Subject	الموضوع
-	Author	المؤلف
-	Keywords	الكلمات المفتاحية
-	Category	الفئة
-	Paragraphs	الفقرات
-	Sections	الأقسام
-	Words	الكلمات
-	Blank document	مستند فارغ
-	Studio handbook (sample)	دليل الاستوديو (نموذج)
-	Letter	خطاب
-	Résumé	سيرة ذاتية
-	Report	تقرير
-	OK	موافق
-	Apply	تطبيق
-	Yes	نعم
-	No	لا
-	Don't Save	عدم الحفظ
-	Underline Words Only	تسطير الكلمات فقط
-	Cancel	إلغاء

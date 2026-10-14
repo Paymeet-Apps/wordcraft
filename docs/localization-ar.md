@@ -33,7 +33,7 @@ draw order (`bidi::visual`). The layout is not mirrored yet (later tasks of the 
 | Subscript / Superscript | منخفض / مرتفع |
 | Font / Font Size / Font Color | الخط / حجم الخط / لون الخط |
 | Paragraph / Style / Styles | الفقرة / النمط / الأنماط |
-| Heading / Title | عنوان / العنوان |
+| Heading / Title (style) | عنوان / العنوان الرئيسي |
 | Header / Footer | الرأس / التذييل |
 | Footnote / Endnote | حاشية سفلية / حاشية ختامية |
 | Table / Row / Column / Cell | جدول / صف / عمود / خلية |
@@ -47,7 +47,9 @@ draw order (`bidi::visual`). The layout is not mirrored yet (later tasks of the 
 | Spelling & Grammar / Thesaurus | الإملاء والنحو / مرادفات |
 | Word Count / Language | عدد الكلمات / اللغة |
 | Table of Contents / Index / Bibliography | جدول المحتويات / الفهرس / قائمة المراجع |
-| Citation / Cross-reference / Bookmark | اقتباس / إسناد مرجعي / إشارة مرجعية |
+| Citation / Cross-reference / Bookmark | استشهاد / إسناد مرجعي / إشارة مرجعية |
+| Change to Display / Inline (equation) | تحويل إلى معادلة مستقلة / ضمن السطر |
+| Research (kept distinct from Search) | بحث معرفي |
 | Watermark / Page Color / Page Borders | علامة مائية / لون الصفحة / حدود الصفحة |
 | Zoom / Ruler / Gridlines | تكبير/تصغير / المسطرة / خطوط الشبكة |
 | Print Layout / Web Layout / Read Mode | تخطيط الطباعة / تخطيط ويب / وضع القراءة |
@@ -57,3 +59,4 @@ draw order (`bidi::visual`). The layout is not mirrored yet (later tasks of the 
 ## Revision history
 
 - 2026-10-14: first version with the `ar` catalog (L10N-AR.5).
+- 2026-10-14: wording fixes (Title, Citation, outlines, equation display) (L10N-AR.5).
