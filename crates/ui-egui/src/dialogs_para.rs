@@ -7,10 +7,10 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use wordcraft_doc::props::{Border, BorderStyle, Borders, Rgb, TabAlign, TabLeader, TabStop};
 
-use crate::WordApp;
 use crate::dialogs::{buttons, color_menu};
 use crate::options::MeasureExt;
 use crate::theme::{Tokens, semibold};
+use crate::{WordApp, rtl};
 
 /// Stops closer than this (points) are the same stop.
 const SAME_POS: f32 = 0.5;
@@ -121,19 +121,23 @@ impl TabsForm {
 pub fn tabs(app: &mut WordApp, ui: &mut Ui, f: &mut TabsForm) -> bool {
     let u = unit();
     let k = u.pt_per_unit();
-    ui.horizontal(|ui| {
-        ui.vertical(|ui| {
+    rtl::row(ui, |ui| {
+        rtl::column(ui, |ui| {
             ui.label(tl!("Tab stop position:"));
             ui.add(egui::DragValue::new(&mut f.pos).speed(0.05).range(-22.0 * 72.0 / k..=22.0 * 72.0 / k).measure(u).max_decimals(2));
             let mut pick = None;
-            egui::Frame::new().stroke(Stroke::new(1.0, Tokens::get(ui.ctx()).input_border)).inner_margin(4.0).show(ui, |ui| {
-                ui.set_min_size(vec2(150.0, 96.0));
-                egui::ScrollArea::vertical().max_height(96.0).show(ui, |ui| {
-                    for (i, t) in f.stops.iter().enumerate() {
-                        if ui.selectable_label(f.selected == Some(i), u.format_with(t.pos, crate::options::decimal())).clicked() {
-                            pick = Some(i);
+            // A scroll area in a right-aligned column would measure as wide as all the free room:
+            // the list (of numbers) gets a box of its own width.
+            rtl::fitted(ui, "tab_stops", |ui| {
+                egui::Frame::new().stroke(Stroke::new(1.0, Tokens::get(ui.ctx()).input_border)).inner_margin(4.0).show(ui, |ui| {
+                    ui.set_min_size(vec2(150.0, 96.0));
+                    egui::ScrollArea::vertical().max_height(96.0).show(ui, |ui| {
+                        for (i, t) in f.stops.iter().enumerate() {
+                            if ui.selectable_label(f.selected == Some(i), u.format_with(t.pos, crate::options::decimal())).clicked() {
+                                pick = Some(i);
+                            }
                         }
-                    }
+                    });
                 });
             });
             if let Some(i) = pick
@@ -146,7 +150,7 @@ pub fn tabs(app: &mut WordApp, ui: &mut Ui, f: &mut TabsForm) -> bool {
             }
         });
         ui.add_space(12.0);
-        ui.vertical(|ui| {
+        rtl::column(ui, |ui| {
             ui.label(tl!("Default tab stops:"));
             ui.add(egui::DragValue::new(&mut f.default_tab).speed(0.05).range(1.0 / k..=1584.0 / k).measure(u).max_decimals(2));
             ui.add_space(8.0);
@@ -173,7 +177,7 @@ pub fn tabs(app: &mut WordApp, ui: &mut Ui, f: &mut TabsForm) -> bool {
             (TabAlign::Decimal, "Decimal"),
             (TabAlign::Bar, "Bar"),
         ] {
-            ui.radio_value(&mut f.align, a, tl!(l));
+            rtl::radio_value(ui, &mut f.align, a, tl!(l));
         }
     });
     ui.label(egui::RichText::new(tl!("Leader")).font(semibold(12.5)));
@@ -185,11 +189,11 @@ pub fn tabs(app: &mut WordApp, ui: &mut Ui, f: &mut TabsForm) -> bool {
             (TabLeader::Underscore, "3 ______"),
             (TabLeader::MiddleDot, "4 ······"),
         ] {
-            ui.radio_value(&mut f.leader, l, tl!(label));
+            rtl::radio_value(ui, &mut f.leader, l, tl!(label));
         }
     });
     ui.add_space(4.0);
-    ui.horizontal(|ui| {
+    rtl::row(ui, |ui| {
         if ui.button(tl!("Set")).clicked() {
             f.set();
         }
@@ -421,31 +425,25 @@ impl BordersForm {
 
 /// The Borders and Shading dialog body. Returns true to close.
 pub fn borders(app: &mut WordApp, ui: &mut Ui, f: &mut BordersForm) -> bool {
-    ui.horizontal(|ui| {
-        for (i, l) in ["Borders", "Page Border", "Shading"].into_iter().enumerate() {
-            if ui.selectable_label(f.tab == i as u8, tl!(l)).clicked() {
-                f.tab = i as u8;
-            }
-        }
-    });
+    crate::dialogs::tab_strip(ui, &mut f.tab, &["Borders", "Page Border", "Shading"]);
     ui.separator();
     let theme = app.session.doc.settings.theme_colors.clone();
     match f.tab {
         0 => {
             let to_text = f.to_text;
             lines(ui, "para", &mut f.para, &theme, Rgb::parse(&f.fill), Target::from(to_text));
-            ui.horizontal(|ui| {
+            rtl::row(ui, |ui| {
                 ui.label(tl!("Apply to:"));
-                ui.radio_value(&mut f.to_text, false, tl!("Paragraph"));
-                ui.radio_value(&mut f.to_text, true, tl!("Text"));
+                rtl::radio_value(ui, &mut f.to_text, false, tl!("Paragraph"));
+                rtl::radio_value(ui, &mut f.to_text, true, tl!("Text"));
             });
         }
         1 => {
             lines(ui, "page", &mut f.page, &theme, None, Target::Page);
-            ui.horizontal(|ui| {
+            rtl::row(ui, |ui| {
                 ui.label(tl!("Apply to:"));
-                ui.radio_value(&mut f.whole_doc, true, tl!("Whole document"));
-                ui.radio_value(&mut f.whole_doc, false, tl!("This section"));
+                rtl::radio_value(ui, &mut f.whole_doc, true, tl!("Whole document"));
+                rtl::radio_value(ui, &mut f.whole_doc, false, tl!("This section"));
             });
         }
         _ => {
@@ -454,10 +452,10 @@ pub fn borders(app: &mut WordApp, ui: &mut Ui, f: &mut BordersForm) -> bool {
             ui.add_space(6.0);
             let fill = Rgb::parse(&f.fill);
             preview(ui, &LineForm::read(None), fill, Target::from(f.fill_to_text));
-            ui.horizontal(|ui| {
+            rtl::row(ui, |ui| {
                 ui.label(tl!("Apply to:"));
-                ui.radio_value(&mut f.fill_to_text, false, tl!("Paragraph"));
-                ui.radio_value(&mut f.fill_to_text, true, tl!("Text"));
+                rtl::radio_value(ui, &mut f.fill_to_text, false, tl!("Paragraph"));
+                rtl::radio_value(ui, &mut f.fill_to_text, true, tl!("Text"));
             });
         }
     }
@@ -487,18 +485,18 @@ impl From<bool> for Target {
 fn lines(ui: &mut Ui, id: &str, l: &mut LineForm, theme: &[Rgb], fill: Option<Rgb>, target: Target) {
     let between = target == Target::Paragraph;
     ui.horizontal_top(|ui| {
-        ui.vertical(|ui| {
+        rtl::column(ui, |ui| {
             ui.label(egui::RichText::new(tl!("Setting:")).font(semibold(12.5)));
             for (s, label) in
                 [(Setting::None, "None"), (Setting::Box, "Box"), (Setting::Shadow, "Shadow"), (Setting::ThreeD, "3-D"), (Setting::Custom, "Custom")]
             {
-                if ui.radio(l.setting == s, tl!(label)).clicked() {
+                if rtl::radio(ui, l.setting == s, tl!(label)).clicked() {
                     l.apply_setting(s);
                 }
             }
         });
         ui.add_space(8.0);
-        ui.vertical(|ui| {
+        rtl::column(ui, |ui| {
             ui.label(tl!("Style:"));
             let current = STYLES.iter().find(|(s, _)| *s == l.style).map(|(_, n)| *n).unwrap_or("Single");
             egui::ComboBox::from_id_salt((id, "style")).selected_text(tl!(current)).width(120.0).show_ui(ui, |ui| {
@@ -519,7 +517,7 @@ fn lines(ui: &mut Ui, id: &str, l: &mut LineForm, theme: &[Rgb], fill: Option<Rg
                 });
         });
         ui.add_space(8.0);
-        ui.vertical(|ui| {
+        rtl::column(ui, |ui| {
             ui.label(egui::RichText::new(tl!("Preview")).font(semibold(12.5)));
             if let Some(side) = preview(ui, l, fill, target) {
                 l.toggle(side);

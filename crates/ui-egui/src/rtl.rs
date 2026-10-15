@@ -16,20 +16,35 @@ pub fn is_rtl() -> bool {
 
 /// `ui.horizontal` that starts at the visual start edge (right under RTL). Allocates exactly
 /// as `Ui::horizontal` does.
+///
+/// A sizing pass (an auto-sized window's first frame, a grid's first frame) only measures, so it
+/// lays the row out left to right: right to left, content wider than the room it was given would
+/// spill past the left edge and the window would keep that extra width.
 pub fn row<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
     let size = vec2(ui.available_size_before_wrap().x, ui.spacing().interact_size.y);
-    ui.allocate_ui_with_layout(size, row_layout(Align::Center), add)
+    let layout = if ui.is_sizing_pass() { Layout::left_to_right(Align::Center) } else { row_layout(Align::Center) };
+    ui.allocate_ui_with_layout(size, layout, add)
 }
 
 /// `ui.vertical` whose items line up on the start edge (the right under RTL). Inside a
 /// right-to-left row a plain `ui.vertical` would land at the far left of the free space.
+/// A sizing pass lays it out as `ui.vertical` (see [`row`]): right-aligned content measures as
+/// wide as the room it was given.
 pub fn column<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
-    if is_rtl() { ui.scope_builder(egui::UiBuilder::new().layout(Layout::top_down(Align::Max)), add) } else { ui.vertical(add) }
+    if is_rtl() && !ui.is_sizing_pass() {
+        ui.scope_builder(egui::UiBuilder::new().layout(Layout::top_down(Align::Max)), add)
+    } else {
+        ui.vertical(add)
+    }
 }
 
 /// Content that always lays out from the left of the free space (an egui `Grid` or `ScrollArea`),
 /// placed at the cursor of a right-to-left row: it gets a box exactly as wide as it measured last
 /// frame (a changed width discards the frame and lays it out again). English: `add(ui)` as is.
+///
+/// The content runs in a child that does not size the box: the box is always the stored width, so
+/// a pass where the content came out wider than last time doesn't push past the box's right edge
+/// and widen an auto-sized window for good (the next pass gets the new width).
 pub fn fitted<R>(ui: &mut Ui, id_salt: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
     if !is_rtl() {
         return add(ui);
@@ -37,13 +52,19 @@ pub fn fitted<R>(ui: &mut Ui, id_salt: &str, add: impl FnOnce(&mut Ui) -> R) -> 
     let id = ui.id().with(("rtl_fitted", id_salt));
     let known = ui.data(|d| d.get_temp::<f32>(id));
     let width = known.unwrap_or_else(|| ui.available_width());
-    let r = ui.allocate_ui_with_layout(vec2(width, ui.available_height()), Layout::top_down(Align::Min), add);
-    let got = r.response.rect.width();
+    let r = ui.allocate_ui_with_layout(vec2(width, ui.available_height()), Layout::top_down(Align::Min), |ui| {
+        let mut content = ui.new_child(egui::UiBuilder::new().max_rect(ui.max_rect()).layout(Layout::top_down(Align::Min)));
+        let inner = add(&mut content);
+        let used = content.min_rect();
+        ui.set_min_size(vec2(known.unwrap_or(used.width()), used.height()));
+        (inner, used.width())
+    });
+    let (inner, got) = r.inner;
     if known.is_none_or(|k| (k - got).abs() > 0.5) {
         ui.data_mut(|d| d.insert_temp(id, got));
         ui.ctx().request_discard("rtl: fitted width changed");
     }
-    r.inner
+    inner
 }
 
 /// The start-to-end row layout: left to right, or right to left under RTL.
@@ -77,6 +98,15 @@ pub fn rect(outer: Rect, r: Rect) -> Rect {
     if is_rtl() { Rect::from_min_max(egui::pos2(x(outer, r.max.x), r.min.y), egui::pos2(x(outer, r.min.x), r.max.y)) } else { r }
 }
 
+/// `egui::Grid::new(id_salt).num_columns(num_columns)` for rows built by [`grid_row`]. Under RTL
+/// the column count is left unset: egui gives the declared last column every point up to the
+/// grid's right edge, and a right-to-left cell there pins its content to that edge, so the column
+/// never fits its content (captions overlap their fields, or sit far from them).
+pub fn grid(id_salt: impl egui::AsIdSalt, num_columns: usize) -> egui::Grid {
+    let g = egui::Grid::new(id_salt);
+    if is_rtl() { g } else { g.num_columns(num_columns) }
+}
+
 /// One `Grid` row: cells in reading order (reversed under RTL), each aligned to its column's
 /// start edge, then `end_row`.
 pub fn grid_row<const N: usize>(ui: &mut Ui, cells: [&mut dyn FnMut(&mut Ui); N]) {
@@ -84,7 +114,11 @@ pub fn grid_row<const N: usize>(ui: &mut Ui, cells: [&mut dyn FnMut(&mut Ui); N]
         for cell in cells.into_iter().rev() {
             // Height-capped like `row`, or the cell would take the grid's whole remaining height.
             let size = vec2(ui.available_width(), ui.spacing().interact_size.y);
-            ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Center), |ui| cell(ui));
+            // A sizing pass (a window's first frame, a grid's first frame) only measures, and its
+            // cells are narrower than their content: laid out right to left the content would
+            // spill left of the grid, and an auto-sized window would keep that extra width.
+            let dir = if ui.is_sizing_pass() { Layout::left_to_right(Align::Center) } else { Layout::right_to_left(Align::Center) };
+            ui.allocate_ui_with_layout(size, dir, |ui| cell(ui));
         }
     } else {
         // English: exactly the plain `label; field; end_row()` it replaces.
@@ -441,6 +475,81 @@ pub fn checkbox<'a>(ui: &mut Ui, checked: &'a mut bool, atoms: impl IntoAtoms<'a
     shown.response
 }
 
+/// [`checkbox`], greyed out unless `enabled`. English: exactly
+/// `ui.add_enabled(enabled, egui::Checkbox::new(checked, atoms))`.
+pub fn checkbox_enabled<'a>(ui: &mut Ui, enabled: bool, checked: &'a mut bool, atoms: impl IntoAtoms<'a>) -> Response {
+    if is_rtl() {
+        ui.add_enabled_ui(enabled, |ui| checkbox(ui, checked, atoms)).inner
+    } else {
+        ui.add_enabled(enabled, egui::Checkbox::new(checked, atoms))
+    }
+}
+
+/// A radio button that reads in the interface direction. English: exactly `ui.radio`. RTL: the
+/// circle is right of its label (drawn as egui draws its own, mirrored). For dialogs.
+///
+/// The RTL drawing is ported from egui 0.36.2's `RadioButton` (MIT OR Apache-2.0), Copyright (c)
+/// 2018-2021 Emil Ernerfeldt.
+pub fn radio<'a>(ui: &mut Ui, checked: bool, atoms: impl IntoAtoms<'a>) -> Response {
+    if !is_rtl() {
+        return ui.radio(checked, atoms);
+    }
+    let icon_width = ui.spacing().icon_width;
+    let mut min_size = Vec2::splat(ui.spacing().interact_size.y);
+    min_size.y = min_size.y.max(icon_width);
+    let icon_size = vec2(icon_width, icon_width.max(min_size.y));
+    let rect_id = egui::Id::new("wc::rtl_radio");
+    let mut atoms = atoms.into_atoms();
+    let text = atoms.text().map(String::from);
+    atoms.push_right(egui::Atom::custom(rect_id, icon_size));
+    let mut prepared = egui::AtomLayout::new(atoms).sense(egui::Sense::click()).min_size(min_size).allocate(ui);
+    prepared
+        .response
+        .widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::RadioButton, ui.is_enabled(), checked, text.as_deref().unwrap_or("")));
+    if !ui.is_rect_visible(prepared.response.rect) {
+        return prepared.response;
+    }
+    let visuals = *ui.style().interact(&prepared.response);
+    prepared.fallback_text_color = visuals.text_color();
+    let shown = prepared.paint(ui);
+    if let Some(rect) = shown.rect(rect_id) {
+        // egui's icon rectangles hug the rect's left edge: move them to its right edge.
+        let (small, big) = ui.spacing().icon_rectangles(rect);
+        let shift = vec2(rect.right() - big.right(), 0.0);
+        let (small, big) = (small.translate(shift), big.translate(shift));
+        let painter = ui.painter();
+        painter.add(egui::epaint::CircleShape {
+            center: big.center(),
+            radius: big.width() / 2.0 + visuals.expansion,
+            fill: visuals.bg_fill,
+            stroke: visuals.bg_stroke,
+        });
+        if checked {
+            painter.add(egui::epaint::CircleShape {
+                center: small.center(),
+                radius: small.width() / 3.0,
+                fill: visuals.fg_stroke.color,
+                stroke: Default::default(),
+            });
+        }
+    }
+    shown.response
+}
+
+/// `ui.radio_value` through [`radio`]: selects `alternative` when clicked. English: exactly
+/// `ui.radio_value`.
+pub fn radio_value<'a, V: PartialEq>(ui: &mut Ui, current: &mut V, alternative: V, atoms: impl IntoAtoms<'a>) -> Response {
+    if !is_rtl() {
+        return ui.radio_value(current, alternative, atoms);
+    }
+    let mut r = radio(ui, *current == alternative, atoms);
+    if r.clicked() && *current != alternative {
+        *current = alternative;
+        r.mark_changed();
+    }
+    r
+}
+
 /// Test helper: the screen rect of every text shape drawn last frame whose text is `text`.
 #[cfg(test)]
 pub(crate) fn text_rects(out: &egui::FullOutput, text: &str) -> Vec<Rect> {
@@ -668,6 +777,33 @@ mod tests {
         assert_eq!(checkbox_rects("en", true), checkbox_rects("en", false), "english: exactly the stock check box");
     }
 
+    /// (radio button rect, label text rect) for one radio button labelled "Portrait".
+    fn radio_rects(code: &str, ours: bool) -> (Rect, Rect) {
+        with_lang(code, || {
+            let mut h = egui_kittest::Harness::new_ui(|ui| {
+                let mut v = 1;
+                if ours {
+                    radio_value(ui, &mut v, 1, "Portrait");
+                } else {
+                    ui.radio_value(&mut v, 1, "Portrait");
+                }
+            });
+            h.run();
+            let node = h.get_by_label("Portrait").rect();
+            let text = text_rects(h.output(), "Portrait");
+            (node, text[0])
+        })
+    }
+
+    #[test]
+    fn rtl_radio_puts_the_circle_right_of_its_label() {
+        let (node, text) = radio_rects("ar", true);
+        assert!(text.right() <= node.right() - 14.0 && text.left() <= node.left() + 1.0, "arabic: label {text:?} at the left of {node:?}");
+        let (node, text) = radio_rects("en", true);
+        assert!(text.left() >= node.left() + 14.0, "english: label {text:?} after the circle in {node:?}");
+        assert_eq!(radio_rects("en", true), radio_rects("en", false), "english: exactly the stock radio button");
+    }
+
     /// (sub-menu button rect, sub-menu item rect) with the sub-menu open.
     fn sub_menu_rects(code: &str) -> (Rect, Rect) {
         with_lang(code, || {
@@ -700,6 +836,58 @@ mod tests {
         assert!(inner.right() <= more.left() + 1.0, "arabic: the sub-menu {inner:?} opens left of {more:?}");
         let (more, inner) = sub_menu_rects("en");
         assert!(inner.left() >= more.right() - 1.0, "english: the sub-menu {inner:?} opens right of {more:?}");
+    }
+
+    /// (caption rect, field rect) of each row of a fitted two-column grid in a dialog-like window,
+    /// after a few frames: a short caption, then a long one.
+    fn fitted_grid_rows(code: &str) -> Vec<(Rect, Rect)> {
+        with_lang(code, || {
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(800.0, 300.0)).build_ui(|ui| {
+                let ctx = ui.ctx().clone();
+                // As a dialog: an auto-sized window (its first frame is a sizing pass).
+                egui::Window::new("w").resizable(false).collapsible(false).show(&ctx, |ui| {
+                    ui.set_min_width(340.0);
+                    column(ui, |ui| {
+                        fitted(ui, "g", |ui| {
+                            grid("g", 2).show(ui, |ui| {
+                                for (caption, field) in [("A:", "short field"), ("A much longer caption:", "field two")] {
+                                    grid_row(
+                                        ui,
+                                        [
+                                            &mut |ui| {
+                                                ui.label(caption);
+                                            },
+                                            &mut |ui| {
+                                                let _ = ui.button(field);
+                                            },
+                                        ],
+                                    );
+                                }
+                            });
+                        });
+                    });
+                });
+            });
+            h.run_steps(6);
+            [("A:", "short field"), ("A much longer caption:", "field two")]
+                .iter()
+                .map(|(c, f)| (h.get_by_label(c).rect(), h.get_by_label(f).rect()))
+                .collect()
+        })
+    }
+
+    #[test]
+    fn rtl_grid_columns_fit_their_widest_cell() {
+        let gap = egui::Style::default().spacing.item_spacing.x;
+        for (caption, field) in fitted_grid_rows("ar") {
+            // The field ends left of its caption's column, with no overlap and no wide gap.
+            assert!(field.right() <= caption.left() + 0.5, "arabic: field {field:?} overlaps caption {caption:?}");
+        }
+        let rows = fitted_grid_rows("ar");
+        let (long_caption, long_field) = rows[1];
+        assert!(long_caption.left() - long_field.right() <= gap + 12.0, "arabic: wide gap {long_field:?} .. {long_caption:?}");
+        let (short_caption, _) = rows[0];
+        assert!((short_caption.right() - long_caption.right()).abs() <= 0.5, "arabic: captions share their right edge");
     }
 
     #[test]

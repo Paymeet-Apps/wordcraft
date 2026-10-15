@@ -390,7 +390,7 @@ fn properties_column(app: &mut WordApp, ui: &mut Ui, info: &serde_json::Value) {
     let mut focused = None;
     // RTL: the grid in a box of its own width at the right (egui's Grid lays out from the left).
     rtl::fitted(ui, "props", |ui| {
-        egui::Grid::new("props").num_columns(2).spacing(vec2(12.0, 6.0)).show(ui, |ui| {
+        crate::rtl::grid("props", 2).spacing(vec2(12.0, 6.0)).show(ui, |ui| {
             for (l, v) in [
                 ("Title", &mut props.title),
                 ("Subject", &mut props.subject),
