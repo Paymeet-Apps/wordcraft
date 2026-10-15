@@ -1437,7 +1437,7 @@ fn length_value(v: &mut f32) -> egui::DragValue<'_> {
 
 /// A field in points: ` pt` after the number, or under RTL the unit before it in draw order, so
 /// it reads number-then-unit from the right.
-fn points(v: egui::DragValue<'_>) -> egui::DragValue<'_> {
+pub(crate) fn points(v: egui::DragValue<'_>) -> egui::DragValue<'_> {
     if rtl::is_rtl() { v.prefix(format!("{} ", tl!("pt"))) } else { v.suffix(format!(" {}", tl!("pt"))) }
 }
 

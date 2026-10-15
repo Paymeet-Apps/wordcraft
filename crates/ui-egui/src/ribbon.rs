@@ -447,6 +447,12 @@ fn edge_cue(ui: &mut Ui, rect: Rect, glyph: &str, hint: &str, t: &Tokens) -> boo
     resp.clicked()
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The width an RTL [`scroll_strip`] showed last (tests).
+    static STRIP_VIEW: std::cell::Cell<f32> = const { std::cell::Cell::new(0.0) };
+}
+
 /// A horizontally scrolling strip of tiles at most `max_w` wide. Under RTL the tiles start at the
 /// right: they are laid out right to left in a box as wide as they measured last frame, and the
 /// scroll position is kept as the distance from that start, as for the ribbon row.
@@ -462,11 +468,23 @@ fn scroll_strip(ui: &mut Ui, salt: &str, max_w: f32, add: impl FnOnce(&mut Ui)) 
     let (natural, view, from_end) = ui.data(|d| d.get_temp::<(f32, f32, f32)>(id)).unwrap_or((0.0, 0.0, 0.0));
     let overflow = (natural - view).max(0.0);
     let mut measured = 0.0;
-    let out = area.id_salt(("rtl_strip", salt)).horizontal_scroll_offset((overflow - from_end).max(0.0)).show(ui, |ui| {
-        let size = vec2(natural, ui.spacing().interact_size.y);
-        measured = ui.allocate_ui_with_layout(size, egui::Layout::right_to_left(egui::Align::Center), add).response.rect.width();
-    });
+    // The strip sits at the cursor of a right-to-left row in a box of its own width: the tiles'
+    // width (up to `max_w`), or `max_w` before they have been measured. A box sized from what the
+    // scroll area showed last frame (`rtl::fitted`) locks in a first, too narrow measurement: the
+    // Table Styles strip showed one tile (Task 16 screenshots).
+    let box_w = if natural > 0.0 { natural.min(max_w) } else { max_w };
+    let out = ui
+        .allocate_ui_with_layout(vec2(box_w, ui.available_height()), egui::Layout::top_down(egui::Align::Min), |ui| {
+            ui.set_min_width(box_w);
+            area.id_salt(("rtl_strip", salt)).horizontal_scroll_offset((overflow - from_end).max(0.0)).show(ui, |ui| {
+                let size = vec2(natural, ui.spacing().interact_size.y);
+                measured = ui.allocate_ui_with_layout(size, egui::Layout::right_to_left(egui::Align::Center), add).response.rect.width();
+            })
+        })
+        .inner;
     let view_now = out.inner_rect.width();
+    #[cfg(test)]
+    STRIP_VIEW.with(|v| v.set(view_now));
     if (measured - natural).abs() > 0.5 || (view_now - view).abs() > 0.5 {
         ui.data_mut(|d| d.insert_temp(id, (measured, view_now, from_end)));
         ui.ctx().request_discard("ribbon: RTL strip width changed");
@@ -1301,9 +1319,8 @@ fn layout(app: &mut WordApp, ui: &mut Ui) {
         let indent = |ui: &mut Ui, v: &mut f32| {
             ui.add_sized(FIELD, egui::DragValue::new(v).speed(3.6 / k).range(-792.0 / k..=1584.0 / k).measure(u).max_decimals(2)).changed()
         };
-        let spacing = |ui: &mut Ui, v: &mut f32| {
-            ui.add_sized(FIELD, egui::DragValue::new(v).speed(1.0).range(0.0..=1584.0).suffix(format!(" {}", tl!("pt")))).changed()
-        };
+        let spacing =
+            |ui: &mut Ui, v: &mut f32| ui.add_sized(FIELD, crate::dialogs::points(egui::DragValue::new(v).speed(1.0).range(0.0..=1584.0))).changed();
         // Rows through `rtl::grid_row`: under RTL Indent is the right column and each label sits
         // right of its field.
         crate::rtl::fitted(ui, "layout_para", |ui| {
@@ -1981,7 +1998,7 @@ fn chart_design(app: &mut WordApp, ui: &mut Ui) {
                 crate::widgets::row(ui, |ui| {
                     ui.label(egui::RichText::new(tl!(label)).small());
                     let mut v = v0;
-                    let r = ui.add(egui::DragValue::new(&mut v).speed(1.0).range(36.0..=2000.0).suffix(" pt"));
+                    let r = ui.add(crate::dialogs::points(egui::DragValue::new(&mut v).speed(1.0).range(36.0..=2000.0)));
                     if r.changed() {
                         if r.dragged() && !r.drag_started() {
                             app.session.join_next_undo();
@@ -2014,7 +2031,7 @@ fn shape_format(app: &mut WordApp, ui: &mut Ui) {
                 crate::rtl::sub_menu(ui, tl!("Weight"), |ui| {
                     let color = stroke.unwrap_or(wordcraft_doc::Rgb::BLACK).hex();
                     for w in [0.25, 0.5, 0.75, 1.0, 1.5, 2.25, 3.0, 4.5, 6.0] {
-                        mi(ui, app, &format!("{w} pt"), "shape.outline", json!({"color": color, "width": w}));
+                        mi(ui, app, &crate::i18n::fmt(tl!("{n} pt"), &[("n", &w.to_string())]), "shape.outline", json!({"color": color, "width": w}));
                     }
                 });
             });
@@ -2069,7 +2086,7 @@ fn shape_format(app: &mut WordApp, ui: &mut Ui) {
                 for (label, key, v0) in [("W:", "width", w0), ("H:", "height", h0)] {
                     ui.label(egui::RichText::new(tl!(label)).small());
                     let mut v = v0;
-                    let r = ui.add(egui::DragValue::new(&mut v).speed(1.0).range(4.0..=2000.0).suffix(" pt"));
+                    let r = ui.add(crate::dialogs::points(egui::DragValue::new(&mut v).speed(1.0).range(4.0..=2000.0)));
                     if r.changed() {
                         if r.dragged() && !r.drag_started() {
                             app.session.join_next_undo();
@@ -2137,7 +2154,7 @@ fn shape_effects_menu(ui: &mut Ui, app: &mut WordApp, theme: &[wordcraft_doc::Rg
         mi(ui, app, "No Glow", "shape.effects", json!({"glow": null}));
         ui.separator();
         for size in [5.0, 8.0, 11.0, 18.0] {
-            mi(ui, app, &format!("{size} pt"), "shape.effects", json!({"glow": size}));
+            mi(ui, app, &crate::i18n::fmt(tl!("{n} pt"), &[("n", &size.to_string())]), "shape.effects", json!({"glow": size}));
         }
         ui.separator();
         crate::rtl::sub_menu(ui, tl!("Glow Colors"), |ui| {
@@ -2149,7 +2166,7 @@ fn shape_effects_menu(ui: &mut Ui, app: &mut WordApp, theme: &[wordcraft_doc::Rg
         mi(ui, app, "No Soft Edges", "shape.effects", json!({"softEdge": null}));
         ui.separator();
         for r in [1.0, 2.5, 5.0, 10.0, 25.0, 50.0] {
-            mi(ui, app, &format!("{r} pt"), "shape.effects", json!({"softEdge": r}));
+            mi(ui, app, &crate::i18n::fmt(tl!("{n} pt"), &[("n", &r.to_string())]), "shape.effects", json!({"softEdge": r}));
         }
     });
 }
@@ -2227,7 +2244,7 @@ fn picture_format(app: &mut WordApp, ui: &mut Ui) {
             crate::widgets::row(ui, |ui| {
                 ui.label(egui::RichText::new(tl!("W:")).small());
                 let mut w = w0;
-                let r = ui.add(egui::DragValue::new(&mut w).speed(1.0).range(4.0..=2000.0).suffix(format!(" {}", tl!("pt"))));
+                let r = ui.add(crate::dialogs::points(egui::DragValue::new(&mut w).speed(1.0).range(4.0..=2000.0)));
                 if r.changed() {
                     if r.dragged() && !r.drag_started() {
                         app.session.join_next_undo();
@@ -2236,7 +2253,7 @@ fn picture_format(app: &mut WordApp, ui: &mut Ui) {
                 }
                 ui.label(egui::RichText::new(tl!("H:")).small());
                 let mut h = h0;
-                let r = ui.add(egui::DragValue::new(&mut h).speed(1.0).range(4.0..=2000.0).suffix(format!(" {}", tl!("pt"))));
+                let r = ui.add(crate::dialogs::points(egui::DragValue::new(&mut h).speed(1.0).range(4.0..=2000.0)));
                 if r.changed() {
                     if r.dragged() && !r.drag_started() {
                         app.session.join_next_undo();
@@ -2334,14 +2351,12 @@ fn table_design(app: &mut WordApp, ui: &mut Ui) {
             .map(|s| (s.builtin, s.id.clone(), crate::i18n::style_name(s)))
             .collect();
         styles.sort_by_key(|(builtin, _, _)| *builtin);
-        crate::rtl::fitted(ui, "table_styles", |ui| {
-            scroll_strip(ui, "table_styles", 420.0, |ui| {
-                for (_, id, name) in styles {
-                    if crate::previews::table_style_tile(ui, app, &id).rtl_hover_text(name).clicked() {
-                        let _ = app.run("table.style", json!({"style": id}));
-                    }
+        scroll_strip(ui, "table_styles", 420.0, |ui| {
+            for (_, id, name) in styles {
+                if crate::previews::table_style_tile(ui, app, &id).rtl_hover_text(name).clicked() {
+                    let _ = app.run("table.style", json!({"style": id}));
                 }
-            })
+            }
         });
         stack(ui, |ui| {
             let current = look.and_then(|_| {
@@ -3021,6 +3036,54 @@ mod tests {
         }
         h.run_steps(4);
         h
+    }
+
+    /// The size boxes on Picture Format and Shape Format show the unit in the interface language,
+    /// read number-then-unit: " pt" after the number in English, the translated unit before it in
+    /// draw order in Arabic (they showed "pt", or the unit on the wrong side, before Task 16).
+    #[test]
+    fn object_size_boxes_show_the_unit_in_the_interface_language() {
+        for code in ["en", "ar"] {
+            let pt = crate::i18n::tr(crate::i18n::Lang::from_code(code).unwrap(), "pt");
+            let shown = |n: &str| if code == "ar" { format!("{pt} {n}") } else { format!("{n} {pt}") };
+            for (tab, setup) in [
+                (
+                    "Picture Format",
+                    vec![("insert.picture", json!({"data": png_data()})), ("picture.size", json!({"width": 60, "height": 30, "lockAspect": false}))],
+                ),
+                ("Shape Format", vec![("insert.shape", json!({"kind": "rectangle", "width": 60, "height": 30}))]),
+            ] {
+                let mut h = app_harness(2560.0, code);
+                for (cmd, params) in setup {
+                    h.state_mut().run(cmd, params).unwrap_or_else(|e| panic!("{tab}: {cmd}: {e}"));
+                }
+                h.state_mut().run("ui.tab", json!({"tab": tab})).unwrap();
+                h.run_steps(4);
+                for n in ["60", "30"] {
+                    assert!(h.query_by_value(&shown(n)).is_some(), "{code} {tab}: a size box reads {:?}", shown(n));
+                }
+                if code == "ar" && tab == "Picture Format" {
+                    // The crop sides and the Border menu were outside the reference key set.
+                    for side in ["L", "T", "R", "B"] {
+                        assert!(h.query_by_label(side).is_none(), "the crop side {side} is translated");
+                    }
+                    assert!(h.query_by_label("Border").is_none(), "Border is translated");
+                }
+            }
+        }
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+    }
+
+    /// Arabic Table Design shows the table styles strip as wide as English (its 420 pt cap), not
+    /// the single tile it locked into when an `rtl::fitted` box sized it from its first, narrow
+    /// measurement (Task 16 screenshots).
+    #[test]
+    fn arabic_table_styles_strip_is_as_wide_as_english() {
+        let mut h = tab_harness("ar", "Table Design");
+        h.run_steps(6);
+        let width = super::STRIP_VIEW.with(|v| v.get());
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(width >= 400.0, "arabic strip {width} pt wide (one tile is 58 pt)");
     }
 
     fn every_menu_opens(code: &str) {

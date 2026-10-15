@@ -105,6 +105,9 @@ pub fn page(app: &mut WordApp, ui: &mut Ui) {
     let current = if PANES.contains(&app.ui.options_pane.as_str()) { app.ui.options_pane.clone() } else { "general".to_string() };
     // In the Backstage's right-aligned column `horizontal_top` already runs right to left, so
     // the pane list is at the right under RTL.
+    // RTL: the settings column is capped to the room left of the pane list (the right-to-left row
+    // offers it more than is on screen, so long notes ran past the window's left edge at 1024 pt).
+    let content_w = if rtl::is_rtl() { (ui.available_width() - 170.0 - 12.0 - 1.0 - 20.0).clamp(120.0, 640.0) } else { 640.0 };
     ui.horizontal_top(|ui| {
         rtl::column(ui, |ui| {
             ui.set_width(170.0);
@@ -130,7 +133,7 @@ pub fn page(app: &mut WordApp, ui: &mut Ui) {
         ui.painter().rect_filled(line, 0.0, t.border);
         ui.add_space(20.0);
         rtl::column(ui, |ui| {
-            ui.set_max_width(640.0);
+            ui.set_max_width(content_w);
             match current.as_str() {
                 "display" => display(app, ui),
                 "proofing" => proofing(app, ui),
@@ -152,7 +155,7 @@ fn section(ui: &mut Ui, title: &str) {
 }
 
 fn note(ui: &mut Ui, text: &str) {
-    ui.label(RichText::new(tl!(text)).small().weak());
+    rtl::wrapped_label(ui, tl!(text), |s| RichText::new(s).small().weak());
 }
 
 /// Change settings through `file.options` (the command agents use).
@@ -483,7 +486,13 @@ fn advanced(app: &mut WordApp, ui: &mut Ui) {
 
 fn agents(ui: &mut Ui) {
     section(ui, "Agents");
-    ui.label(tl!("Every command is available to scripts and AI agents: run `wordcraft-cli mcp` for an MCP server, or start the app with `--control <port>` for the JSON control channel."));
+    rtl::wrapped_label(
+        ui,
+        tl!(
+            "Every command is available to scripts and AI agents: run `wordcraft-cli mcp` for an MCP server, or start the app with `--control <port>` for the JSON control channel."
+        ),
+        |s| RichText::new(s),
+    );
 }
 
 /// Interface theme: Light, Dark, or follow the system's appearance (#115).
@@ -522,12 +531,12 @@ fn interface_size_picker(app: &mut WordApp, ui: &mut Ui) {
             }
         });
     });
-    ui.label(
-        RichText::new(tl!(
+    rtl::wrapped_label(
+        ui,
+        tl!(
             "Makes the ribbon, menus and dialogs larger or smaller. Auto follows your system's display scaling; 100% is one screen pixel per point. Document zoom is separate."
-        ))
-        .small()
-        .weak(),
+        ),
+        |s| RichText::new(s).small().weak(),
     );
 }
 
@@ -577,7 +586,9 @@ fn language_picker(app: &mut WordApp, ui: &mut Ui) {
             }
         });
     });
-    ui.label(RichText::new(tl!("Automatic follows your system's language. Menus and commands change; your documents don't.")).small().weak());
+    rtl::wrapped_label(ui, tl!("Automatic follows your system's language. Menus and commands change; your documents don't."), |s| {
+        RichText::new(s).small().weak()
+    });
 }
 
 /// Deserialize `input` over `T`'s defaults one setting at a time: a value of the wrong type is
@@ -905,5 +916,50 @@ mod tests {
         h.state_mut().run("file.options", json!({"units": "auto", "region": "en-US"})).unwrap();
         h.run_steps(4);
         assert_eq!(length(72.0), "1\"");
+    }
+
+    /// Long Arabic notes on the Options page wrap from their logical text, so the sentence's first
+    /// word is on the top row and its last word on a lower one (egui's own wrapping cut the
+    /// draw-order string and put the end of the sentence first, and ran past the pane at 1024 pt).
+    #[test]
+    fn long_arabic_notes_wrap_first_line_first() {
+        let ar = crate::i18n::Lang::from_code("ar").unwrap();
+        for (pane, source) in [
+            (
+                "general",
+                "Makes the ribbon, menus and dialogs larger or smaller. Auto follows your system's display scaling; 100% is one screen pixel per point. Document zoom is separate.",
+            ),
+            (
+                "agents",
+                "Every command is available to scripts and AI agents: run `wordcraft-cli mcp` for an MCP server, or start the app with `--control <port>` for the JSON control channel.",
+            ),
+        ] {
+            let mut a = app();
+            a.run("ui.language", json!({"value": "ar"})).unwrap();
+            a.run("file.options", json!({"pane": pane})).unwrap();
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1024.0, 700.0)).build_ui_state(
+                |ui, app: &mut WordApp| {
+                    let ctx = ui.ctx().clone();
+                    app.logic(&ctx);
+                    app.ui(ui);
+                },
+                a,
+            );
+            h.run_steps(4);
+            let logical = crate::i18n::logical(crate::i18n::tr(ar, source)).unwrap().to_string();
+            let words: Vec<&str> = logical.split_whitespace().collect();
+            // Two-word needles in draw order (an RTL run draws its words right to left).
+            let needle = |a: &str, b: &str| crate::bidi::visual(&format!("{a} {b}"), true).into_owned();
+            let n = words.len();
+            let (first, last) = (needle(words[0], words[1]), needle(words[n - 3], words[n - 2]));
+            let row = |w: &String| {
+                let n = h.query_by_label_contains(w).unwrap_or_else(|| panic!("{pane}: no row with {w:?}"));
+                n.rect()
+            };
+            let (top, bottom) = (row(&first), row(&last));
+            assert_ne!(top, bottom, "{pane}: the note is wrapped into rows");
+            assert!(top.top() < bottom.top(), "{pane}: {first:?} ({top:?}) is above {last:?} ({bottom:?})");
+            crate::i18n::set_current(crate::i18n::Lang::EN);
+        }
     }
 }

@@ -84,13 +84,46 @@ pub(crate) fn first_strong_is_rtl(s: &str) -> bool {
     false
 }
 
-/// `s` with every `{name}` token wrapped in an LTR isolate, so it stays contiguous and unchanged.
+/// The byte length of a `` `code` `` span starting at `i` (backticks included): a command or flag
+/// such as `` `--control <port>` ``, always left to right. Not when it holds a right-to-left
+/// character or a line break, or runs past 256 bytes.
+fn code_span_len(s: &str, i: usize) -> Option<usize> {
+    let rest = s.get(i..)?.strip_prefix('`')?;
+    let end = rest.find('`')?;
+    let body = rest.get(..end)?;
+    (end > 0 && end <= 256 && !body.contains('\n') && !has_rtl(body)).then(|| end.saturating_add(2))
+}
+
+/// The byte length of a file-type pattern `(*.ext)` starting at `i` (1–10 ASCII letters or
+/// digits): "(*.rtf)" after an Arabic word would otherwise draw as "(rtf.*)".
+fn file_pattern_len(s: &str, i: usize) -> Option<usize> {
+    let rest = s.get(i..)?.strip_prefix("(*.")?;
+    let ext = rest.bytes().take_while(u8::is_ascii_alphanumeric).count();
+    ((1..=10).contains(&ext) && rest.as_bytes().get(ext) == Some(&b')')).then(|| ext.saturating_add(4))
+}
+
+/// Whether the last strong character before byte `i` is right to left.
+fn after_rtl(s: &str, i: usize) -> bool {
+    s.get(..i)
+        .and_then(|head| head.chars().rev().map(bidi_class).find(|c| matches!(c, BidiClass::L | BidiClass::R | BidiClass::AL)))
+        .is_some_and(|c| c != BidiClass::L)
+}
+
+/// The byte length of a token at `i` that is always drawn left to right as one piece: a `{name}`
+/// placeholder, or a `` `code` `` span or `(*.ext)` file pattern that follows right-to-left text (after
+/// left-to-right text UAX #9 already keeps them with it, as in `مستند PDF (*.pdf)` or `Markdown (*.md)`).
+fn ltr_token_len(s: &str, i: usize) -> Option<usize> {
+    placeholder_len(s, i).or_else(|| code_span_len(s, i).or_else(|| file_pattern_len(s, i)).filter(|_| after_rtl(s, i)))
+}
+
+/// `s` with every left-to-right token ([`ltr_token_len`]: `{name}` placeholders, code spans, file
+/// patterns) wrapped in an LTR isolate, so it stays contiguous and unchanged.
 fn isolate_placeholders(s: &str) -> String {
     let mut out = String::with_capacity(s.len().saturating_add(16));
     let mut last = 0;
     let mut i = 0;
     while i < s.len() {
-        if let Some(n) = placeholder_len(s, i) {
+        if let Some(n) = ltr_token_len(s, i) {
             let end = i.saturating_add(n);
             out.push_str(s.get(last..i).unwrap_or_default());
             out.push(LRI);
@@ -515,6 +548,23 @@ mod tests {
     #[test]
     fn placeholders_stay_whole_and_take_their_visual_slot() {
         assert_eq!(visual("صفحة {page} من {pages}", true), "{pages} من {page} صفحة");
+    }
+
+    /// Code spans and file patterns are left-to-right tokens: without the isolate, UAX #9 gives the
+    /// neutrals at their edges the Arabic direction, so "(*.rtf)" drew as "(rtf.*)" and
+    /// "`--control <port>`" as "`<control <port--`" (seen in the Task 16 screenshots).
+    #[test]
+    fn code_spans_and_file_patterns_stay_left_to_right() {
+        assert_eq!(visual("تنسيق النص الغني (*.rtf)", true), "(*.rtf) الغني النص تنسيق");
+        assert_eq!(visual("مستند PDF (*.pdf)", true), "PDF (*.pdf) مستند");
+        assert_eq!(visual("Markdown (*.md)", true), "Markdown (*.md)");
+        assert_eq!(visual("ابدأ مع `--control <port>` الآن", true), "الآن `--control <port>` مع ابدأ");
+        // Not tokens: an unclosed backtick, a pattern without an extension, Arabic in a span.
+        assert_eq!(visual("أ `--x", true), "x--` أ");
+        assert_eq!(visual("أ (*.)", true), "(.*) أ");
+        assert_eq!(visual("أ `ب`", true), "`ب` أ");
+        // Left-to-right text is untouched.
+        assert!(matches!(visual("Rich Text Format (*.rtf)", false), Cow::Borrowed(_)));
     }
 
     #[test]

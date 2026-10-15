@@ -2470,3 +2470,9 @@ preview	Title	رئيسي
 	✓ None	✓ بلا
 	➕ New comment	➕ تعليق جديد
 	📂  Browse…	📂  استعراض…
+# Picture Format crop sides and border menu (L10N-AR.16).
+	L	يسار
+	T	أعلى
+	R	يمين
+	B	أسفل
+	Border	الحد

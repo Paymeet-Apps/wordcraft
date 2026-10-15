@@ -392,6 +392,17 @@ fn properties_column(app: &mut WordApp, ui: &mut Ui, info: &serde_json::Value) {
     let mut props = app.session.doc.core.clone();
     let mut edited = None;
     let mut focused = None;
+    // RTL: the fields get the width they have in English, less what longer captions take, so the
+    // grid stays inside its column at narrow windows (Arabic captions are wider).
+    let field_w = if rtl::is_rtl() {
+        let caption_w = ["Title", "Subject", "Author", "Keywords", "Category"]
+            .iter()
+            .map(|l| egui::WidgetText::from(tl!(l)).into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Body).size().x)
+            .fold(0.0_f32, f32::max);
+        ui.spacing().text_edit_width.min(ui.available_width() - caption_w - 24.0).max(60.0)
+    } else {
+        ui.spacing().text_edit_width
+    };
     // RTL: the grid in a box of its own width at the right (egui's Grid lays out from the left).
     rtl::fitted(ui, "props", |ui| {
         crate::rtl::grid("props", 2).spacing(vec2(12.0, 6.0)).show(ui, |ui| {
@@ -409,10 +420,9 @@ fn properties_column(app: &mut WordApp, ui: &mut Ui, info: &serde_json::Value) {
                         let mut edit = egui::TextEdit::singleline(v).id_salt(("info-prop", l));
                         if rtl::is_rtl() {
                             // The right-to-left cell is only as wide as the column was last frame; give
-                            // the field the width it has in English.
-                            let w = ui.spacing().text_edit_width;
-                            ui.set_min_width(w);
-                            edit = edit.desired_width(w);
+                            // the field the width it has in English (`field_w`).
+                            ui.set_min_width(field_w);
+                            edit = edit.desired_width(field_w);
                         }
                         field = Some(ui.add(edit));
                     }],
@@ -803,14 +813,14 @@ mod tests {
         assert_eq!(h.state().ui.backstage_page, "saveAs");
     }
 
-    /// File › Info in `lang` at 1440×900: the rects of the nav's Export item, the page heading, the
+    /// File › Info in `lang` at `width`×900: the rects of the nav's Export item, the page heading, the
     /// Properties and Statistics captions, and the Title field.
-    fn info_rects(lang: &str) -> [egui::Rect; 5] {
+    fn info_rects(lang: &str, width: f32) -> [egui::Rect; 5] {
         use egui::accesskit::Role;
         let mut a = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::from_text("XYZ")), Services::default());
         a.run("ui.language", json!({"value": lang})).unwrap();
         a.run("ui.backstage", json!({"value": true, "page": "info"})).unwrap();
-        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(width, 900.0)).build_ui_state(
             |ui, app: &mut WordApp| {
                 let ctx = ui.ctx().clone();
                 app.logic(&ctx);
@@ -847,15 +857,30 @@ mod tests {
     fn backstage_navigation_is_on_the_right_in_arabic() {
         // The Title field's caption is in the grid's first column, before the field: the field
         // starts well after the Properties caption's start edge.
-        let [export, heading, props, stats, field] = info_rects("en");
+        let [export, heading, props, stats, field] = info_rects("en", 1440.0);
         assert!(export.right() <= 220.0, "english: the nav column ({export:?}) is at the left");
         assert!(heading.left() < 300.0, "english: the heading ({heading:?}) starts at the left");
         assert!(props.center().x < stats.center().x, "english: Properties ({props:?}) is left of Statistics ({stats:?})");
         assert!(field.left() > props.left() + 20.0, "english: the Title caption ({props:?}) comes left of its field ({field:?})");
-        let [export, heading, props, stats, field] = info_rects("ar");
+        let [export, heading, props, stats, field] = info_rects("ar", 1440.0);
         assert!(export.left() >= 1440.0 - 220.0, "arabic: the nav column ({export:?}) is at the right");
         assert!(heading.right() > 1000.0, "arabic: the heading ({heading:?}) starts at the right");
         assert!(props.center().x > stats.center().x, "arabic: Properties ({props:?}) is right of Statistics ({stats:?})");
         assert!(field.right() < props.right() - 20.0, "arabic: the Title caption comes right of its field ({field:?}, Properties {props:?})");
+    }
+
+    /// At 1024 pt the Arabic captions are wider than the English ones; the property fields must
+    /// shrink instead of running into the Statistics column (they overlapped it before).
+    #[test]
+    fn info_fields_stay_inside_their_column_in_a_narrow_arabic_window() {
+        for lang in ["en", "ar"] {
+            let [_, _, props, stats, field] = info_rects(lang, 1024.0);
+            if lang == "en" {
+                assert!(field.right() < stats.left(), "english: the Title field ({field:?}) ends before Statistics ({stats:?})");
+            } else {
+                assert!(field.left() > stats.right(), "arabic: the Title field ({field:?}) starts after Statistics ({stats:?})");
+                assert!(field.right() < props.right(), "arabic: the field ({field:?}) stays left of its caption column ({props:?})");
+            }
+        }
     }
 }
