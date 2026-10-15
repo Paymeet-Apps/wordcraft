@@ -89,41 +89,36 @@ pub(crate) fn first_strong_is_rtl(s: &str) -> bool {
 /// character or a line break, or runs past 256 bytes.
 fn code_span_len(s: &str, i: usize) -> Option<usize> {
     let rest = s.get(i..)?.strip_prefix('`')?;
-    let end = rest.find('`')?;
+    // Look no further than the longest span: linear on text full of backticks.
+    let end = rest.bytes().take(257).position(|b| b == b'`')?;
     let body = rest.get(..end)?;
     (end > 0 && end <= 256 && !body.contains('\n') && !has_rtl(body)).then(|| end.saturating_add(2))
 }
 
 /// The byte length of a file-type pattern `(*.ext)` starting at `i` (1–10 ASCII letters or
-/// digits): "(*.rtf)" after an Arabic word would otherwise draw as "(rtf.*)".
+/// digits).
 fn file_pattern_len(s: &str, i: usize) -> Option<usize> {
     let rest = s.get(i..)?.strip_prefix("(*.")?;
-    let ext = rest.bytes().take_while(u8::is_ascii_alphanumeric).count();
+    let ext = rest.bytes().take(11).take_while(u8::is_ascii_alphanumeric).count();
     ((1..=10).contains(&ext) && rest.as_bytes().get(ext) == Some(&b')')).then(|| ext.saturating_add(4))
 }
 
-/// Whether the last strong character before byte `i` is right to left.
-fn after_rtl(s: &str, i: usize) -> bool {
-    s.get(..i)
-        .and_then(|head| head.chars().rev().map(bidi_class).find(|c| matches!(c, BidiClass::L | BidiClass::R | BidiClass::AL)))
-        .is_some_and(|c| c != BidiClass::L)
-}
-
-/// The byte length of a token at `i` that is always drawn left to right as one piece: a `{name}`
-/// placeholder, or a `` `code` `` span or `(*.ext)` file pattern that follows right-to-left text (after
-/// left-to-right text UAX #9 already keeps them with it, as in `مستند PDF (*.pdf)` or `Markdown (*.md)`).
-fn ltr_token_len(s: &str, i: usize) -> Option<usize> {
-    placeholder_len(s, i).or_else(|| code_span_len(s, i).or_else(|| file_pattern_len(s, i)).filter(|_| after_rtl(s, i)))
-}
-
-/// `s` with every left-to-right token ([`ltr_token_len`]: `{name}` placeholders, code spans, file
-/// patterns) wrapped in an LTR isolate, so it stays contiguous and unchanged.
+/// `s` with every left-to-right token wrapped in an LTR isolate, so it stays contiguous and
+/// unchanged: `{name}` placeholders always; `` `code` `` spans and `(*.ext)` file patterns unless
+/// left-to-right text comes before them (the last strong character outside an isolate is
+/// left to right), where UAX #9 already keeps them with that text, as in `مستند PDF (*.pdf)` or
+/// `Markdown (*.md)`. So "(*.rtf)" after an Arabic word, or at the start of a right-to-left
+/// line, does not draw as "(rtf.*)". The last strong direction is carried forward in one pass:
+/// linear on hostile input.
 fn isolate_placeholders(s: &str) -> String {
     let mut out = String::with_capacity(s.len().saturating_add(16));
+    // Was the last strong character outside an isolate left to right?
+    let mut after_ltr = false;
     let mut last = 0;
     let mut i = 0;
-    while i < s.len() {
-        if let Some(n) = ltr_token_len(s, i) {
+    while let Some(c) = s.get(i..).and_then(|rest| rest.chars().next()) {
+        let token = placeholder_len(s, i).or_else(|| code_span_len(s, i).or_else(|| file_pattern_len(s, i)).filter(|_| !after_ltr));
+        if let Some(n) = token {
             let end = i.saturating_add(n);
             out.push_str(s.get(last..i).unwrap_or_default());
             out.push(LRI);
@@ -131,9 +126,14 @@ fn isolate_placeholders(s: &str) -> String {
             out.push(PDI);
             last = end;
             i = end;
-        } else {
-            i = i.saturating_add(1);
+            continue;
         }
+        match bidi_class(c) {
+            BidiClass::L => after_ltr = true,
+            BidiClass::R | BidiClass::AL => after_ltr = false,
+            _ => {}
+        }
+        i = i.saturating_add(c.len_utf8());
     }
     out.push_str(s.get(last..).unwrap_or_default());
     out
@@ -215,10 +215,11 @@ fn visual_line(line: &str, base_rtl: bool, out: &mut String) {
 /// One text, in the order egui must draw it (epaint has no bidi algorithm; see the module doc).
 ///
 /// `base_rtl` is the paragraph direction. Each `\n`-separated line is converted on its own.
-/// `{name}` placeholders are LTR isolates: contiguous and unchanged. Returns the input itself
-/// when drawing it as it stands is already right: no strong right-to-left character and an LTR
-/// base, a single right-to-left run, or text beyond the 64 KiB cap. The output holds no bidi
-/// control characters.
+/// Left-to-right tokens are LTR isolates, contiguous and unchanged: `{name}` placeholders, and
+/// `` `code` `` spans and `(*.ext)` file patterns not preceded by left-to-right text (see
+/// `isolate_placeholders`). Returns the input itself when drawing it as it stands is already
+/// right: no strong right-to-left character and an LTR base, a single right-to-left run, or text
+/// beyond the 64 KiB cap. The output holds no bidi control characters.
 pub(crate) fn visual(s: &str, base_rtl: bool) -> Cow<'_, str> {
     if s.len() > MAX_LEN || (!base_rtl && !has_rtl(s)) {
         return Cow::Borrowed(s);
@@ -251,8 +252,9 @@ pub(crate) fn own(s: &str) -> Cow<'_, str> {
 /// line break) is reordered on its own, and every `\n` is a piece of its own in place. Bidi
 /// control characters stay inside the ranges; the caller drops them ([`piece_text`]). Callers may
 /// split a range at their own boundaries: the characters inside one are always in logical order.
-/// `{name}` tokens get no special treatment (this is for document text). One range for text
-/// beyond the 64 KiB cap.
+/// No token is isolated (this is for document text): `{name}` placeholders, code spans and file
+/// patterns are ordinary characters here, unlike in `visual`. One range for text beyond the
+/// 64 KiB cap.
 pub(crate) fn visual_pieces(text: &str, base_rtl: bool) -> Vec<(std::ops::Range<usize>, bool)> {
     if text.len() > MAX_LEN || (!base_rtl && !has_rtl(text)) {
         return vec![(0..text.len(), false)];
@@ -390,11 +392,8 @@ mod tests {
     /// A context with the interface fonts (Inter first) and the Arabic face as a fallback, as the
     /// application installs fonts (`theme::add_fallback_faces`).
     fn context() -> Option<Context> {
-        let Some(face) = arabic_face() else {
-            eprintln!("skipped: no Arabic font");
-            return None;
-        };
-        eprintln!("Arabic face: {} {}", face.family, face.style);
+        // Inert without an installed Arabic face.
+        let face = arabic_face()?;
         let mut defs: FontDefinitions = crate::theme::font_definitions(false, false, false);
         let mut data = FontData::from_owned(face.data().to_vec());
         data.index = face.index();
@@ -420,8 +419,8 @@ mod tests {
         g.iter().find(|t| t.0 == c).unwrap_or_else(|| panic!("no glyph for {c}: {g:?}")).1
     }
 
-    /// `visual_pieces` joined back is exactly `visual` (for text without `{name}` tokens), so a
-    /// styled line reads as the plain one would.
+    /// `visual_pieces` joined back is exactly `visual` (for text without `{name}`, code-span or
+    /// file-pattern tokens), so a styled line reads as the plain one would.
     #[test]
     fn visual_pieces_join_to_visual() {
         for s in [
@@ -472,7 +471,6 @@ mod tests {
     fn epaint_shapes_an_arabic_run_right_to_left() {
         let Some(ctx) = context() else { return };
         let g = glyphs(&ctx, "ملف");
-        eprintln!("ملف: {g:?}");
         // The first letter is the rightmost: glyphs come out in visual order.
         assert!(x_of(&g, 'م') > x_of(&g, 'ف'), "{g:?}");
         assert!(x_of(&g, 'م') > x_of(&g, 'ل') && x_of(&g, 'ل') > x_of(&g, 'ف'), "{g:?}");
@@ -484,7 +482,6 @@ mod tests {
         let joined = glyphs(&ctx, "ملف");
         let isolated: Vec<Id> = ["م", "ل", "ف"].iter().map(|s| glyphs(&ctx, s)[0].2).collect();
         let ids = |c: char| joined.iter().find(|t| t.0 == c).map(|t| t.2);
-        eprintln!("joined {joined:?} isolated {isolated:?}");
         // Initial meem, medial lam and final feh are different glyphs from the isolated forms.
         assert_ne!(ids('م'), Some(isolated[0]));
         assert_ne!(ids('ل'), Some(isolated[1]));
@@ -495,7 +492,6 @@ mod tests {
     fn epaint_keeps_mixed_runs_in_logical_order() {
         let Some(ctx) = context() else { return };
         let g = glyphs(&ctx, "حفظ PDF");
-        eprintln!("حفظ PDF: {g:?}");
         let arabic_max = ['ح', 'ف', 'ظ'].iter().map(|&c| x_of(&g, c)).fold(f32::MIN, f32::max);
         // Logical order, left to right: no base-direction reordering, so `PDF` is to the right.
         assert!(x_of(&g, 'P') > arabic_max, "P sits right of the Arabic: {g:?}");
@@ -506,7 +502,6 @@ mod tests {
     fn epaint_mirrors_parentheses_in_rtl_runs() {
         let Some(ctx) = context() else { return };
         let g = glyphs(&ctx, "(نص)");
-        eprintln!("(نص): {g:?}");
         // Brackets come from the Latin face as runs of their own and are never mirrored: the
         // opening bracket stays leftmost.
         assert!(x_of(&g, '(') < x_of(&g, 'ن') && x_of(&g, 'ن') != x_of(&g, ')'));
@@ -519,7 +514,6 @@ mod tests {
     fn epaint_groups_neutrals() {
         let Some(ctx) = context() else { return };
         let g = glyphs(&ctx, "أ - ب");
-        eprintln!("أ - ب: {g:?}");
         // Logical order, left to right: أ, space, hyphen, space, ب. The neutrals are drawn by the
         // Latin face, so they are separate runs and do not join the Arabic ones.
         let xs: Vec<f32> = g.iter().map(|t| t.1).collect();
@@ -558,6 +552,11 @@ mod tests {
         assert_eq!(visual("تنسيق النص الغني (*.rtf)", true), "(*.rtf) الغني النص تنسيق");
         assert_eq!(visual("مستند PDF (*.pdf)", true), "PDF (*.pdf) مستند");
         assert_eq!(visual("Markdown (*.md)", true), "Markdown (*.md)");
+        // At the start of a right-to-left line, too (nothing left to right before them).
+        assert_eq!(visual("(*.md) ملف", true), "ملف (*.md)");
+        assert_eq!(visual("`--x` ملف", true), "ملف `--x`");
+        // After a placeholder (an isolate, not left-to-right text of the line).
+        assert_eq!(visual("{n} (*.md)", true), "(*.md) {n}");
         assert_eq!(visual("ابدأ مع `--control <port>` الآن", true), "الآن `--control <port>` مع ابدأ");
         // Not tokens: an unclosed backtick, a pattern without an extension, Arabic in a span.
         assert_eq!(visual("أ `--x", true), "x--` أ");
@@ -597,6 +596,23 @@ mod tests {
         }
     }
 
+    /// Many code spans or file patterns near the 64 KiB cap stay linear: the token check used to
+    /// rescan the whole prefix for its last strong character (quadratic, every frame).
+    #[test]
+    fn many_tokens_near_the_cap_stay_fast() {
+        let spans = format!("{}ا", "`1` ".repeat(16_000));
+        let patterns = format!("ا{}", " (*.a)".repeat(10_000));
+        let started = std::time::Instant::now();
+        for s in [&spans, &patterns] {
+            assert!(s.len() < super::MAX_LEN);
+            let _ = visual(s, true);
+            let _ = visual(s, false);
+            let _ = super::visual_pieces(s, true);
+        }
+        let took = started.elapsed();
+        assert!(took < std::time::Duration::from_secs(2), "took {took:?}");
+    }
+
     #[test]
     fn arabic_block_neutrals_stay_with_their_arabic_segment() {
         // The Arabic comma is drawn by the Arabic face inside the run of the word before it.
@@ -607,7 +623,6 @@ mod tests {
     fn epaint_draws_the_arabic_comma_left_of_its_word() {
         let Some(ctx) = context() else { return };
         let g = glyphs(&ctx, &visual("نعم، لا", true));
-        eprintln!("نعم، لا: {g:?}");
         let xs = |cs: &[char]| g.iter().filter(|t| cs.contains(&t.0)).map(|t| t.1).collect::<Vec<f32>>();
         let lam_alef_max = xs(&['ل', 'ا']).into_iter().fold(f32::MIN, f32::max);
         let word_min = xs(&['ن', 'ع', 'م']).into_iter().fold(f32::MAX, f32::min);

@@ -260,8 +260,12 @@ fn bidi_snippet(
 /// Constrain each heading to the available pane width so long document text cannot
 /// enlarge the panel. The full heading stays accessible on hover. Headings draw in bidi order
 /// (an Arabic heading reads right to left in any interface language).
+///
+/// Only the first [`HEADING_SHOWN_CHARS`] characters are drawn or measured (a heading can be a
+/// whole 64 KiB paragraph), and the hover text is built only while hovered.
 fn nav_heading(ui: &mut Ui, level: u8, text: &str, selected: bool) -> egui::Response {
     let font = if level == 0 { semibold(12.5) } else { regular(12.5) };
+    let text = shown_prefix(text, HEADING_SHOWN_CHARS);
     crate::rtl::row(ui, |ui| {
         ui.add_space(level as f32 * 14.0);
         let room = ui.available_width() - 2.0 * ui.spacing().button_padding.x;
@@ -270,9 +274,22 @@ fn nav_heading(ui: &mut Ui, level: u8, text: &str, selected: bool) -> egui::Resp
             vec2(ui.available_width(), ui.spacing().interact_size.y),
             egui::Button::selectable(selected, egui::RichText::new(shown).font(font)).truncate(),
         )
-        .on_hover_text(crate::i18n::user_text(text).into_owned())
+        .on_hover_ui(|ui| {
+            // As `Response::on_hover_text`, but the text is converted only while hovered.
+            ui.set_max_width(ui.spacing().tooltip_width);
+            ui.add(egui::Label::new(crate::i18n::user_text(text).into_owned()));
+        })
     })
     .inner
+}
+
+/// The most characters of a heading the Navigation pane draws, measures or shows on hover: far
+/// more than fit in the pane, few enough that reordering and measuring it every frame is cheap.
+const HEADING_SHOWN_CHARS: usize = 512;
+
+/// The first `max` characters of `text` (all of it when shorter), cut at a character boundary.
+fn shown_prefix(text: &str, max: usize) -> &str {
+    text.char_indices().nth(max).and_then(|(i, _)| text.get(..i)).unwrap_or(text)
 }
 
 /// Document text for one line `width` wide, in draw order. Left-to-right text is returned as it is
@@ -831,7 +848,8 @@ fn describe(prop: &str, v: &Value) -> String {
         (_, Value::String(s)) => tl!(&camel_words(s)).to_string(),
         _ => return label.to_string(),
     };
-    format!("{label}: {value}")
+    // Both parts are catalog text or numbers: draw order already.
+    crate::i18n::labeled(label, &value)
 }
 
 /// `1.50` → `1.5`, `12.0` → `12`.
@@ -1063,6 +1081,33 @@ mod chrome_text_tests {
         out.drop_without_applying_deltas();
         assert_eq!(drawn.len(), 1, "{drawn:?}");
         assert!(drawn[0].starts_with('…') && drawn[0].ends_with("مقدمة"), "cut at the logical end: {drawn:?}");
+    }
+
+    /// A hostile heading (a 64 KB paragraph of code spans ending in Arabic) draws in time: only its
+    /// first characters are reordered and measured, and the hover text is built only on hover.
+    #[test]
+    fn huge_headings_draw_in_time() {
+        let text = format!("{}ا", "`1` ".repeat(16_000));
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 600.0));
+        let started = std::time::Instant::now();
+        for _ in 0..3 {
+            let out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+                egui::Panel::left("navigation_test").default_size(260.0).show(ui, |ui| super::nav_heading(ui, 0, &text, false));
+            });
+            out.drop_without_applying_deltas();
+        }
+        let took = started.elapsed();
+        assert!(took < std::time::Duration::from_secs(3), "three frames took {took:?}");
+    }
+
+    #[test]
+    fn shown_prefix_cuts_at_a_character_boundary() {
+        assert_eq!(super::shown_prefix("مرحبا", 2), "مر");
+        assert_eq!(super::shown_prefix("abc", 5), "abc");
+        assert_eq!(super::shown_prefix("", 0), "");
+        assert_eq!(super::shown_prefix("ab", 0), "");
     }
 
     /// Editing an Arabic comment shown in bidi order writes the typed text, in reading order,
