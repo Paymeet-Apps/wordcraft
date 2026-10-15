@@ -1,12 +1,12 @@
 # Localization parity with Microsoft Word
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-15 · **Change:** minor (Arabic interface: mirrored, 2,458 entries, native review pending; previously minor: Italian proofing: it-IT spelling from the installed Hunspell dictionary, accent-first suggestions, conservative grammar with Italian messages; previously minor: Portuguese proofing; previously trivial: Turkish interface catalog completed, 2,325 entries, #774; previously minor: Hungarian interface added; previously trivial: sorting and table numbers follow the text's language, #836, #837; previously minor: Polish interface; Polish proofing — spelling, grammar, hyphenation — and a proofing language per run; previously minor: Turkish interface added; previously major: first version; catalogs measured from `crates/ui-egui/src/i18n`, Word's languages from its bundle listing) · **Target:** Microsoft Word (Microsoft 365) for Mac 16.113.4
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-15 · **Change:** trivial (Arabic hours re-estimated after the screenshot pass, 2,463 entries; previously minor: Arabic interface: mirrored, 2,458 entries, native review pending; previously minor: Italian proofing: it-IT spelling from the installed Hunspell dictionary, accent-first suggestions, conservative grammar with Italian messages; previously minor: Portuguese proofing; previously trivial: Turkish interface catalog completed, 2,325 entries, #774; previously minor: Hungarian interface added; previously trivial: sorting and table numbers follow the text's language, #836, #837; previously minor: Polish interface; Polish proofing — spelling, grammar, hyphenation — and a proofing language per run; previously minor: Turkish interface added; previously major: first version; catalogs measured from `crates/ui-egui/src/i18n`, Word's languages from its bundle listing) · **Target:** Microsoft Word (Microsoft 365) for Mac 16.113.4
 
 Interface languages, script support and proofing per language. How translation works (catalog
 format, adding a language, clean-room rule): `crates/ui-egui/src/i18n/mod.rs`.
 
-**Dimension: ~29% (estimated; 28% before Italian proofing, 27% before Portuguese proofing, 25% before Polish and per-run proofing languages), 70–115 h to full
-for the twelve key languages** plus ~45 h for the other ~17 languages Word ships, plus
+**Dimension: ~29% (estimated; 28% before Italian proofing, 27% before Portuguese proofing, 25% before Polish and per-run proofing languages), 75–125 h to full
+for the twelve key languages** (70–115 before the Arabic re-estimate) plus ~45 h for the other ~17 languages Word ships, plus
 native-speaker review (human).
 
 ## What Word ships (measured by listing the bundle)
@@ -48,7 +48,7 @@ shared items below.
 | Simplified Chinese (Mandarin) | zh-hans | 929 entries; 98% of extracted, ~95% of visible | most; newer panes English | CJK ✅, IME ✅; Windows UI font fixed (#248); interface font chain covers every catalog character, installed CJK font after the embedded ones when it doesn't, PingFang found on macOS 12 (#486); font list by Chinese names (宋体, 微软雅黑, #505); no vertical text | no | partial | 3–5 |
 | Spanish | es | ~930; 98% / ~95% | most | Latin ✅ | no | partial | 1–2 |
 | Hindi | hi | 0 | ❌ | Devanagari shaping via HarfRust, untested; no hyphenation | no | none | 4–6 |
-| Arabic | ar | 2,458 entries (the Polish key set, [`localization-ar.md`](localization-ar.md)); mirrored UI ✅ | ✅ dialogs, panes, Backstage and menus mirrored; a few labels outside the reference key set still English | shaping, joining, lam-alef, bidi ✅ (#207); mirrored interface ✅; interface text reordered by our own bidi pass; no kashida; no Arabic proofing | no (pending) | partial | 2–4 (native review, proofing, UI font) |
+| Arabic | ar | 2,463 entries (the Polish key set, [`localization-ar.md`](localization-ar.md)); mirrored UI ✅ | ✅ dialogs, panes, Backstage and menus mirrored; the 2026-10-15 screenshot pass found no English label left except the mailings envelope size | shaping, joining, lam-alef, bidi ✅ (#207); mirrored interface ✅; interface text reordered by our own bidi pass; no kashida; no Arabic proofing | no (pending) | partial | 9–15 (text-field caret and selection plus mirror follow-ups 6–10, Arabic proofing 3–5) + native review (human) + UI font (owner) |
 | French | fr | 2,033 entries | most; newer dialogs partly English | Latin ✅ | no | partial | 1–2 |
 | Portuguese | pt-br (pt-PT none) | ~930; 98% / ~95% (pt-BR) | most | Latin ✅ | no | partial | 2–4 (pt-BR finish + pt-PT) |
 | Indonesian | id | 0 | ❌ | Latin ✅ | no | none | 3–4 |
@@ -168,6 +168,7 @@ WordCraft keeps 2,54 cm).
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-15 | trivial | Arabic after the side-by-side screenshot pass: 2,463 entries (crop sides and Border added), hours to full 2–4 → 9–15 (text fields, mirror follow-ups and proofing counted); twelve-language total 70–115 → 75–125 h (L10N-AR.16) |
 | 2026-10-15 | minor | Arabic interface (`ar`): 2,458 entries (every key of the Polish catalog), fully mirrored window, own bidi reordering of interface text, Arabic UI font chain; 20 interface languages; native review, proofing and a craft-fonts UI face pending (L10N-AR.16) |
 | 2026-10-12 | minor | Italian proofing: it-IT spelling from the installed Hunspell dictionary (system `it_IT`, never bundled — upstream is GPL), accent-first suggestions, conservative grammar with Italian messages, TeX Italian hyphenation patterns (MIT option); Review › Language already offered Italian; an `it` interface writes it-IT documents |
 | 2026-10-11 | minor | Turkish interface catalog completed (2,325 entries, the same keys as Russian): equation gallery, built-in style names, watermarks, paper sizes and preview tiles; the interface audit checks Turkish too (#774) |

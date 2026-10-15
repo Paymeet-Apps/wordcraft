@@ -1,6 +1,6 @@
 # Arabic interface
 
-> **Last reviewed:** 2026-10-15 · **Last updated:** 2026-10-15 · **Change:** minor (status, what is done and known gaps; previously minor: Arabic catalog complete) · **Target:** WordCraft 0.7.x
+> **Last reviewed:** 2026-10-15 · **Last updated:** 2026-10-15 · **Change:** trivial (screenshot pass: crop sides, Border, units; previously minor: status, what is done and known gaps; previously minor: Arabic catalog complete) · **Target:** WordCraft 0.7.x
 
 Choose **File › Options › Interface language › العربية**, or follow an Arabic system display
 language (`ar`, `ar-SA`, `ar_EG.UTF-8`, any `ar-*`). `ui.language` with `{"value":"ar"}` selects it
@@ -8,7 +8,7 @@ explicitly. Document text, command ids, CLI/MCP/control responses and file paths
 
 `crates/ui-egui/src/i18n/ar.tsv` is written in Modern Standard Arabic from the meaning of the English
 labels (clean-room; no product localization consulted). It covers the whole reference key set (every
-key of the Polish catalog, 2,458 entries): ribbon, menus, dialogs, panes, Backstage, built-in style
+key of the Polish catalog, 2,463 entries): ribbon, menus, dialogs, panes, Backstage, built-in style
 names, the equation gallery, watermarks and preview tiles; `arabic_covers_every_key_of_the_polish_catalog`
 keeps it complete. A string added later shows in English until it is translated. The catalog is
 written in logical order; the parser stores it in draw order (`bidi::visual`).
@@ -17,7 +17,7 @@ written in logical order; the parser stores it in draw order (`bidi::visual`).
 
 **Done**
 
-- Catalog: 2,458 entries, every key of the Polish catalog; `arabic_covers_every_key_of_the_polish_catalog` keeps it complete.
+- Catalog: 2,463 entries, every key of the Polish catalog; `arabic_covers_every_key_of_the_polish_catalog` keeps it complete.
 - Mirrored interface: title bar, status bar, ribbon, menus, panes, dialogs, Backstage, tooltips and icons ([`ui-parity.md`](ui-parity.md#mirrored-interface-arabic)). Hebrew needs only a catalog plus `rtl: true` on its `LangInfo`.
 - Interface text is reordered by `bidi.rs` (our own UAX #9 pass, because epaint draws neutrals separately and does not mirror brackets); counts, locations and tooltips are composed in logical order, then converted once (`i18n::fmt`, `fmt_translated`, `suffixed`).
 - User and document text in the chrome (navigation headings, find results, comments, recent files, window caption, style names, bookmarks, the Organizer, preview tiles, the default title "مستند1") is drawn in its own order (`i18n::user_text`, `t_logical`), and file names use the interface direction.
@@ -33,7 +33,7 @@ written in logical order; the parser stores it in draw order (`bidi::visual`).
 - The shared keys "Display" and "Bar" have one translation each but two meanings in the interface.
 - Command search takes logical queries but compares against draw-order labels, so Arabic queries match poorly.
 - The page-range and author parsers accept `,` and `;` but not the Arabic comma and semicolon.
-- A few labels outside the reference key set (picture crop B/R/T/L, Picture Format Border, "Table Grid", the mailings label "#10   4.13 x 9.5 in") still show in English.
+- The mailings envelope label "#10   4.13 x 9.5 in" is not wrapped for translation and shows in English (the crop sides and Picture Format Border were added after the screenshot pass; "Table Grid" was already translated).
 
 ## Conventions
 
@@ -127,3 +127,4 @@ written in logical order; the parser stores it in draw order (`bidi::visual`).
 - 2026-10-15: remaining ribbon labels, menus, context menus, SmartArt and chart galleries; catalog complete (L10N-AR.15d).
 - 2026-10-15: review fixes: ASCII separators in syntax hints, maths accents, section break, lasso, logic and rounding functions, RTF, size boxes (L10N-AR.15).
 - 2026-10-15: status, what is done and known gaps; mirrored interface and user-text work described (L10N-AR.16).
+- 2026-10-15: side-by-side screenshot pass: crop sides (يسار، أعلى، يمين، أسفل) and Border (الحد) added; size boxes use نقطة (L10N-AR.16).

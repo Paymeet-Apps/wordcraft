@@ -1,6 +1,6 @@
 # UI parity with Microsoft Word
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-15 · **Change:** minor (mirrored interface for Arabic; previously trivial: no document behind the Start screen, #1129; previously trivial: equation pictures share a few textures, #1002; previously trivial: selection bar in the left margin, #856; previously trivial: table column and row markers on the rulers, #700; previously trivial: table borders and the resize handle drag on the page, #217; previously major: first version; ribbon, dialogs, shortcuts and on-canvas interaction measured from `crates/ui-egui` and the command registry) · **Target:** Microsoft Word (Microsoft 365) for Mac 16.113.4
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-15 · **Change:** trivial (Arabic screenshot pass: RTL row re-measured, 85% → 90%; previously minor: mirrored interface for Arabic; previously trivial: no document behind the Start screen, #1129; previously trivial: equation pictures share a few textures, #1002; previously trivial: selection bar in the left margin, #856; previously trivial: table column and row markers on the rulers, #700; previously trivial: table borders and the resize handle drag on the page, #217; previously major: first version; ribbon, dialogs, shortcuts and on-canvas interaction measured from `crates/ui-egui` and the command registry) · **Target:** Microsoft Word (Microsoft 365) for Mac 16.113.4
 
 How WordCraft looks and feels next to Word: ribbon, dialogs, panes, keyboard, mouse and touch.
 Typing behaviour has its own checklist ([`typing-parity.md`](typing-parity.md)). All assets are our
@@ -40,7 +40,7 @@ own (`AGENTS.md`: no Microsoft iconography, ever).
 | File dialogs (Open, Save As, Export, Insert Picture) | system dialog, without blocking the window (#94); Linux/BSD without a file chooser portal or zenity: WordCraft's own browser, also File › Open › Browse in WordCraft… (#576) | system dialog | 95% | — |
 | Platform conventions (macOS menus/traffic lights #255, Windows title bar, Linux CSD on Wayland #78) | partial | native | 70% | 3–5 |
 | Screen readers (VoiceOver, Narrator, Orca) | AccessKit on; the document canvas describes paragraphs, headings (level), list items, tables, links, pictures (alt text) and the caret and selection, for the pages on screen (#488); not yet tried with real screen readers | full | 50% | 5–8 |
-| Right-to-left (mirrored) interface | ✅ Arabic (any interface language with `rtl: true` mirrors; Hebrew needs a catalog); see [Mirrored interface (Arabic)](#mirrored-interface-arabic) | ✅ (Arabic, Hebrew Word) | 85% (screenshot pass and native review pending) | 4–6 (follow-ups in [gaps.md](gaps.md#arabic-interface-follow-ups)) |
+| Right-to-left (mirrored) interface | ✅ Arabic (any interface language with `rtl: true` mirrors; Hebrew needs a catalog); see [Mirrored interface (Arabic)](#mirrored-interface-arabic) | ✅ (Arabic, Hebrew Word) | 90% (side-by-side screenshot pass done at 1440×900 and 1024×700; native review pending) | 6–10 (`TextEdit` caret and selection 4–6, egui scroll bars and combo boxes 1–2, mirror leftovers 1–2; [gaps.md](gaps.md#arabic-interface-follow-ups)) |
 
 ## Mirrored interface (Arabic)
 
@@ -71,7 +71,8 @@ Deliberate exceptions:
 - **Dialog launchers** flip: the launcher sits at the group's end corner, which is the bottom left in
   RTL, consistent with the ribbon strip.
 - **Data blocks and document previews** (page and font previews, number and size fields, code and
-  shortcut text, sample text in gallery tiles) stay left-to-right.
+  shortcut text, sample text in gallery tiles) stay left-to-right; so do code spans (`` `--control <port>` ``)
+  and file-type patterns (`(*.rtf)`) inside Arabic sentences.
 - **A lone Close** button moves to the left in RTL (OK and Cancel pairs mirror their order).
 - **File names and paths** are drawn with the interface direction as base (an English interface keeps
   `.docx` at the right of an Arabic name; matches OS file managers), not the first strong character.
@@ -89,6 +90,7 @@ conventions: [`localization-ar.md`](localization-ar.md).
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-15 | trivial | Arabic screenshot pass (every ribbon tab incl. contextual ones, Backstage, Options panes, Paragraph, Font, Page Setup, AutoCorrect, panes, menus): Table Styles strip, Info fields at 1024 pt, Options notes, size-box units, file patterns and code spans fixed; RTL row 85% → 90%, 6–10 h (L10N-AR.16) |
 | 2026-10-15 | minor | Mirrored (right-to-left) interface for Arabic: title bar, status bar, ribbon, menus, panes, dialogs, Backstage, icons, tooltips; exceptions and gaps listed (L10N-AR.16) |
 | 2026-10-13 | trivial | The caret is black or white by contrast with the paper, page colour, dark page, shading or highlight under it (#299) |
 | 2026-10-13 | trivial | Clicks on ribbon and status-bar chrome that run no command button (Styles and style-set gallery tiles, tab names, empty ribbon space, View check boxes, the status bar's view buttons and language menu) no longer take keyboard focus from the page: the caret stays and typing continues, as in Word; text fields such as the font size box still take focus. Tabs, gallery tiles and the status bar's view buttons report their name and state to screen readers (#1093) |
