@@ -1,6 +1,6 @@
 # Arabic interface
 
-> **Last reviewed:** 2026-10-14 · **Last updated:** 2026-10-14 · **Change:** minor (first Arabic catalog, `ar`) · **Target:** WordCraft 0.7.x
+> **Last reviewed:** 2026-10-15 · **Last updated:** 2026-10-15 · **Change:** minor (Arabic catalog completion, batch 1) · **Target:** WordCraft 0.7.x
 
 Choose **File › Options › Interface language › العربية**, or follow an Arabic system display
 language (`ar`, `ar-SA`, `ar_EG.UTF-8`, any `ar-*`). `ui.language` with `{"value":"ar"}` selects it
@@ -55,8 +55,21 @@ draw order (`bidi::visual`). The layout is not mirrored yet (later tasks of the 
 | Print Layout / Web Layout / Read Mode | تخطيط الطباعة / تخطيط ويب / وضع القراءة |
 | Options / Properties / Info | خيارات / الخصائص / معلومات |
 | OK / Cancel / Apply / Yes / No | موافق / إلغاء / تطبيق / نعم / لا |
+| Field / Field code / Merge field | حقل / رمز الحقل / حقل دمج |
+| Recipient / Recipient list / Mail Merge | مستلم / قائمة المستلمين / دمج المراسلات |
+| Label (mailing) / Envelope | ملصق / مظروف |
+| Password / Built-in style / Linked style | كلمة المرور / نمط مضمّن / نمط مرتبط |
+| Tab stop / Leader | نقطة جدولة / الخط الموجّه |
+| Caret / Overtype | مؤشر الكتابة / استبدال أثناء الكتابة |
+| Balloons / Revisions (tracked) | الفقاعات / التغييرات (المتعقَّبة) |
+| Hyphenate / Hyphenation zone | تقسيم الكلمات / منطقة التقسيم |
+| Wildcards / Regular expressions / Match case / Whole words | أحرف البدل / التعابير النمطية / مطابقة حالة الأحرف / الكلمات الكاملة فقط |
+| pt (unit) / Inches / Centimeters | نقطة / بوصات / سنتيمترات |
+| Interface language / Interface size / Animation | لغة الواجهة / حجم الواجهة / الحركة |
+| Language names | Arabic adjective with the article: الإنجليزية (الولايات المتحدة)، الفرنسية (فرنسا)، العربية |
 
 ## Revision history
 
 - 2026-10-14: first version with the `ar` catalog (L10N-AR.5).
 - 2026-10-14: wording fixes (Title, Citation, outlines, equation display) (L10N-AR.5).
+- 2026-10-15: dialogs part 1 (font, paragraph, layout, insert, lists, options, files) (L10N-AR.15a).

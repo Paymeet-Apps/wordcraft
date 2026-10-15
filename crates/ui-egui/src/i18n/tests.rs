@@ -1450,3 +1450,23 @@ fn switching_to_arabic_and_back_restores_fonts() {
     assert!(!app.fonts_arabic);
     assert!(!has_arabic_glyph(&ctx), "the Arabic face is gone again");
 }
+
+/// Arabic is complete: it has every key Polish (the reference catalog) has.
+#[test]
+fn arabic_covers_every_key_of_the_polish_catalog() {
+    use std::collections::HashSet;
+    let keys = |source| parse_entries(source).0.into_iter().map(|e| e.source).collect::<HashSet<_>>();
+    let mut missing: Vec<String> = keys(lang("pl").0.source).difference(&keys(lang("ar").0.source)).cloned().collect();
+    missing.sort();
+    assert!(missing.is_empty(), "ar lacks {} keys: {missing:?}", missing.len());
+    let ar = lang("ar");
+    assert_eq!(tr(ar, "File"), "ملف");
+    assert_eq!(tr(ar, "Save"), "حفظ");
+    assert_eq!(tr(ar, "unknown future label"), "unknown future label");
+    set_current(ar);
+    for count in [0, 1, 2, 3, 10, 11, 100, 1000] {
+        let n = count.to_string();
+        assert_eq!(fmt(tr(ar, "{words} words"), &[("words", &n)]), crate::bidi::visual(&format!("الكلمات: {count}"), true));
+    }
+    set_current(Lang::EN);
+}
