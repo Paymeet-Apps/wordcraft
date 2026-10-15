@@ -1,16 +1,17 @@
 # Arabic interface
 
-> **Last reviewed:** 2026-10-15 · **Last updated:** 2026-10-15 · **Change:** minor (Arabic catalog completion, batch 1) · **Target:** WordCraft 0.7.x
+> **Last reviewed:** 2026-10-15 · **Last updated:** 2026-10-15 · **Change:** minor (Arabic catalog complete) · **Target:** WordCraft 0.7.x
 
 Choose **File › Options › Interface language › العربية**, or follow an Arabic system display
 language (`ar`, `ar-SA`, `ar_EG.UTF-8`, any `ar-*`). `ui.language` with `{"value":"ar"}` selects it
 explicitly. Document text, command ids, CLI/MCP/control responses and file paths do not change.
 
 `crates/ui-egui/src/i18n/ar.tsv` is written in Modern Standard Arabic from the meaning of the English
-labels (clean-room; no product localization consulted). It covers every ribbon tab, group, command
-label and location segment, File/backstage navigation, the status bar and dialog buttons. Strings
-not yet translated show in English. The catalog is written in logical order; the parser stores it in
-draw order (`bidi::visual`). The layout is not mirrored yet (later tasks of the plan).
+labels (clean-room; no product localization consulted). It covers the whole reference key set (every
+key of the Polish catalog, 2,458 entries): ribbon, menus, dialogs, panes, Backstage, built-in style
+names, the equation gallery, watermarks and preview tiles; `arabic_covers_every_key_of_the_polish_catalog`
+keeps it complete. A string added later shows in English until it is translated. The catalog is
+written in logical order; the parser stores it in draw order (`bidi::visual`).
 
 ## Conventions
 
@@ -80,6 +81,12 @@ draw order (`bidi::visual`). The layout is not mirrored yet (later tasks of the 
 | Linear / Professional (equation form) | خطي / احترافي |
 | Watermarks DRAFT / CONFIDENTIAL / URGENT / SAMPLE | مسودة / سري / عاجل / نموذج |
 | Paper sizes (Letter, Legal, Executive, Tabloid, B4 (JIS)…) | kept in Latin (standard names); Envelope → مظروف |
+| Glow / Soft Edges / Reflection / Shadow | توهج / حواف ناعمة / انعكاس / ظل |
+| Connector (straight, elbow, curved) | موصل (مستقيم، مرفقي، منحنٍ) |
+| Theme Colors / Theme Fonts / Standard Colors | ألوان السمة / خطوط السمة / الألوان القياسية |
+| Wrap: In Line with Text / Behind Text / In Front of Text | مع النص في السطر / خلف النص / أمام النص |
+| All Markup / No Markup | كل العلامات / بلا علامات |
+| UPPERCASE / lowercase / tOGGLE cASE | أحرف كبيرة / أحرف صغيرة / تبديل حالة الأحرف (Arabic has no case: the label names the action) |
 | Language names | Arabic adjective with the article: الإنجليزية (الولايات المتحدة)، الفرنسية (فرنسا)، العربية |
 
 ## Revision history
@@ -89,3 +96,4 @@ draw order (`bidi::visual`). The layout is not mirrored yet (later tasks of the 
 - 2026-10-15: dialogs part 1 (font, paragraph, layout, insert, lists, options, files) (L10N-AR.15a).
 - 2026-10-15: dialogs part 2, task panes, Backstage, credits (L10N-AR.15b).
 - 2026-10-15: built-in style names, equation gallery, watermarks, paper sizes, preview tiles (L10N-AR.15c).
+- 2026-10-15: remaining ribbon labels, menus, context menus, SmartArt and chart galleries; catalog complete (L10N-AR.15d).
