@@ -20,6 +20,8 @@ written in logical order; the parser stores it in draw order (`bidi::visual`).
 - Commands are verbal nouns (`حفظ`, `نسخ`, `لصق`); placeholders never take a prefix or ending.
 - Product and technical names stay Latin (Zotero, Discord, SmartArt, WordArt, PDF, PNG, Unicode).
 - Left/Right in commands name the physical side (`يسار`, `يمين`).
+- Syntax hints keep ASCII separators (`صفحات مثل 1-3, 5`, `العائلة, الاسم; العائلة, الاسم`): the page-range and author parsers read `,` and `;`, not `،` or `؛`.
+- Option labels are verbal nouns (`استخدام «a» قبل صوت ساكن`); tooltips describe in the present tense (`يعرض المستندات…`).
 
 ## Terminology
 
@@ -77,6 +79,10 @@ written in logical order; the parser stores it in draw order (`bidi::visual`).
 | Emphasis / Strong / Subtle / Intense / Quote | تأكيد / قوي / خفيف / مكثف / اقتباس |
 | Grid Table / List Table / Plain Table | جدول شبكي / جدول قائمة / جدول عادي |
 | Equation: Fraction / Script / Radical / Integral / Large Operator | كسر / نص مرتفع/منخفض / جذر / تكامل / عامل كبير |
+| Equation: Accent(s) / Logical AND / OR / Ceiling / Floor | علامة فوقية (العلامات الفوقية) / العطف المنطقي / الفصل المنطقي / دالة السقف / دالة الأرضية |
+| Section Break / Lasso / Ink stroke | فاصل قسم / تحديد حر / ضربة القلم |
+| Rich Text Format / Typography / Border Painter / Hue | تنسيق النص الغني / فن الخط / فرشاة الحدود / درجة اللون |
+| SmartArt layouts (Basic Venn…) | مخطط فن أساسي … |
 | Bracket(s) / Parentheses / Braces / Matrix / Function / Limit | أقواس مربعة / أقواس / أقواس معقوصة / مصفوفة / دالة / النهاية |
 | Linear / Professional (equation form) | خطي / احترافي |
 | Watermarks DRAFT / CONFIDENTIAL / URGENT / SAMPLE | مسودة / سري / عاجل / نموذج |
@@ -97,3 +103,4 @@ written in logical order; the parser stores it in draw order (`bidi::visual`).
 - 2026-10-15: dialogs part 2, task panes, Backstage, credits (L10N-AR.15b).
 - 2026-10-15: built-in style names, equation gallery, watermarks, paper sizes, preview tiles (L10N-AR.15c).
 - 2026-10-15: remaining ribbon labels, menus, context menus, SmartArt and chart galleries; catalog complete (L10N-AR.15d).
+- 2026-10-15: review fixes: ASCII separators in syntax hints, maths accents, section break, lasso, logic and rounding functions, RTF, size boxes (L10N-AR.15).

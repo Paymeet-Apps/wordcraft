@@ -21,7 +21,7 @@
 	(normal text)	(نص عادي)
 	(not matched)	(غير مطابق)
 	(picture or object)	(صورة أو كائن)
-	0 or More Characters	0 حرف أو أكثر
+	0 or More Characters	صفر أحرف أو أكثر
 	1. Formatting restrictions	1. قيود التنسيق
 	1.5 Line Spacing	تباعد الأسطر 1.5
 	1/4 Em Space	مسافة ربع Em
@@ -62,11 +62,11 @@
 	Above Chart	أعلى المخطط
 	Above the item	فوق العنصر
 	Absolute value cases	حالات القيمة المطلقة
-	Accent	علامة تشكيل
+	Accent	علامة فوقية
 	Accent Gradient	تدرج لوني مميز
 	Accent with Reflection	لون مميز مع انعكاس
 	Accent {n}	لون مميز {n}
-	Accents	علامات التشكيل
+	Accents	العلامات الفوقية
 	Accept	قبول
 	Accept All Changes	قبول جميع التغييرات
 	Accept This Change	قبول هذا التغيير
@@ -244,7 +244,7 @@
 	Basic Process	عملية أساسية
 	Basic Pyramid	هرم أساسي
 	Basic Radial	شعاعي أساسي
-	Basic Venn	فن أساسي
+	Basic Venn	مخطط فن أساسي
 	Bayes' rule	قاعدة بايز
 	Before:	قبل:
 	Beginning of Word	بداية الكلمة
@@ -275,7 +275,7 @@
 	Bookmark name:	اسم الإشارة المرجعية:
 	Border Painter	مرسمة الحدود
 	Border lines	خطوط الحدود
-	Border\nPainter	مرسمة\nالحدود
+	Border\nPainter	فرشاة\nالحدود
 	Borders	حدود
 	Borders and Shading	الحدود والتظليل
 	Borders and Shading…	الحدود والتظليل…
@@ -332,7 +332,7 @@
 	Categories:	الفئات:
 	Category	الفئة
 	Category {n}	الفئة {n}
-	Ceiling	السقف
+	Ceiling	دالة السقف
 	Cell	خلية
 	Cell Margins	هوامش الخلايا
 	Cell Size	حجم الخلية
@@ -469,7 +469,7 @@
 	Comments Pane	جزء التعليقات
 	Comments beside each page and tracked changes in PDFs, prints and images; a comment list at the end of web pages, Markdown and text.	تعليقات بجانب كل صفحة وتغييرات متعقَّبة في ملفات PDF والمطبوعات والصور؛ وقائمة تعليقات في نهاية صفحات الويب وMarkdown والنص.
 	Commits	الإيداعات
-	Common Accent Objects	كائنات التشكيل الشائعة
+	Common Accent Objects	كائنات العلامات الفوقية الشائعة
 	Common Brackets	الأقواس الشائعة
 	Common Fractions	الكسور الشائعة
 	Common Functions	الدوال الشائعة
@@ -484,7 +484,7 @@
 	Company	الشركة
 	Compare	مقارنة
 	Compare Documents	مقارنة المستندات
-	Compared: {changes} changes	تمت المقارنة: التغييرات: {changes}
+	Compared: {changes} changes	تمت المقارنة، التغييرات: {changes}
 	Comparing with another file needs the desktop app.	تتطلب المقارنة مع ملف آخر تطبيق سطح المكتب.
 	Comparison settings	إعدادات المقارنة
 	Compress Pictures	ضغط الصور
@@ -872,7 +872,7 @@
 	Fixed Column Width	عرض عمود ثابت
 	Flip Horizontal	قلب أفقي
 	Flip Vertical	قلب رأسي
-	Floor	الأرضية
+	Floor	دالة الأرضية
 	Focus	تركيز
 	Follow number with:	إتباع الرقم بـ:
 	Font	الخط
@@ -945,7 +945,7 @@
 	Grouping Character Above	حرف تجميع في الأعلى
 	Grouping Character Below	حرف تجميع في الأسفل
 	Grow Font 1 Point	تكبير الخط نقطة واحدة
-	H:	ط:
+	H:	الارتفاع:
 	HTML Format	تنسيق HTML
 	Hanging Indent	مسافة بادئة معلقة
 	Hat	علامة القبعة
@@ -986,7 +986,7 @@
 	How many pages the whole document has	عدد صفحات المستند كله
 	How many pages this section has	عدد صفحات هذا القسم
 	How many words the document holds	عدد الكلمات في المستند
-	Hue:	تدرج اللون:
+	Hue:	درجة اللون:
 	Hyperbolic Cosecant Function	دالة قاطع التمام الزائدية
 	Hyperbolic Cosine Function	دالة جيب التمام الزائدية
 	Hyperbolic Cotangent Function	دالة ظل التمام الزائدية
@@ -1157,13 +1157,13 @@
 	Language	اللغة
 	Large\nOperator	عامل\nكبير
 	Largest Only	الأكبر فقط
-	Lasso	حبل
+	Lasso	تحديد حر
 	Lasso Select	تحديد بالحبل
 	Last	الأخير
 	Last Column	العمود الأخير
 	Last Name	اسم العائلة
 	Last commit	آخر إيداع
-	Last, First; Last, First	العائلة، الاسم؛ العائلة، الاسم
+	Last, First; Last, First	العائلة, الاسم; العائلة, الاسم
 	Latin text font:	خط النص اللاتيني:
 	Layout	تخطيط
 	Layout Summary	ملخص التخطيط
@@ -1264,10 +1264,10 @@
 	Lock Fields	قفل الحقول
 	Logarithm	اللوغاريتم
 	Logarithm with Base	لوغاريتم بأساس
-	Logical AND	و المنطقية
-	Logical AND with Limits	و المنطقية بحدود
-	Logical OR	أو المنطقية
-	Logical OR with Limits	أو المنطقية بحدود
+	Logical AND	العطف المنطقي
+	Logical AND with Limits	العطف المنطقي بحدود
+	Logical OR	الفصل المنطقي
+	Logical OR with Limits	الفصل المنطقي بحدود
 	Lum:	الإضاءة:
 	MIT OR Apache-2.0. Copyright (c) 2026 ArtCraft Team and the WordCraft contributors.	MIT OR Apache-2.0. حقوق النشر (c) 2026 لفريق ArtCraft والمساهمين في WordCraft.
 	Macros	وحدات الماكرو
@@ -1403,7 +1403,7 @@
 	No Fill	بلا تعبئة
 	No Glow	بلا توهج
 	No Markup	بلا علامات
-	No Outline	بلا حد
+	No Outline	بلا خط خارجي
 	No Paragraph Space	بلا مسافة بين الفقرات
 	No Reflection	بلا انعكاس
 	No Shadow	بلا ظل
@@ -1444,7 +1444,7 @@
 	Not saved	غير محفوظ
 	Not saved yet	لم يُحفظ بعد
 	Not used by any command	غير مستخدم لأي أمر
-	Not {name}	بلا {name}
+	Not {name}	غير {name}
 	Nothing	لا شيء
 	Nothing collected yet. Items you copy or cut appear here.	لم يُجمع شيء بعد. تظهر هنا العناصر التي تنسخها أو تقصها.
 	Now used by {command}	مستخدم حاليًا لـ {command}
@@ -1481,7 +1481,7 @@
 	Offset: Top	إزاحة: للأعلى
 	Offset: Top Left	إزاحة: للأعلى واليسار
 	Offset: Top Right	إزاحة: للأعلى واليمين
-	Omit	حذف
+	Omit	إغفال
 	On	تشغيل
 	On: WordCraft opens on File › Home, with a blank document, the templates and your recent documents. Off: it opens a blank document.	تشغيل: يفتح WordCraft على ملف › الصفحة الرئيسية، مع مستند فارغ والقوالب ومستنداتك الأخيرة. إيقاف: يفتح مستندًا فارغًا.
 	On: the caret glides to its new place when you type or use the arrow keys, and its blink fades. Off: it jumps and blinks on and off.	تشغيل: ينزلق مؤشر الكتابة إلى مكانه الجديد عند الكتابة أو استخدام مفاتيح الأسهم، ويتلاشى وميضه. إيقاف: يقفز ويومض ظهورًا واختفاءً.
@@ -1565,7 +1565,7 @@
 	Page\nColor	لون\nالصفحة
 	Page\nNumber	رقم\nالصفحة
 	Pages	الصفحات
-	Pages like 1-3, 5	صفحات مثل 1-3، 5
+	Pages like 1-3, 5	صفحات مثل 1-3, 5
 	Pages of bookmark:	صفحات الإشارة المرجعية:
 	Paragraph	الفقرة
 	Paragraph Character	حرف الفقرة
@@ -1805,8 +1805,8 @@
 	Ribbon and Quick Access Toolbar:	الشريط وشريط أدوات الوصول السريع:
 	Ribbon tabs	علامات تبويب الشريط
 	Rich Text Content Control	عنصر تحكم نص منسق
-	Rich Text Format (*.rtf)	تنسيق النص المنسق (*.rtf)
-	Rich Text Format (RTF)	تنسيق النص المنسق (RTF)
+	Rich Text Format (*.rtf)	تنسيق النص الغني (*.rtf)
+	Rich Text Format (RTF)	تنسيق النص الغني (RTF)
 	Right	يمين
 	Right (vertical)	يمين (رأسي)
 	Right Arrow with Text Above	سهم لليمين بنص أعلاه
@@ -1868,7 +1868,7 @@
 	Search for templates	البحث عن القوالب
 	Search icons	البحث في الأيقونات
 	Secant Function	دالة القاطع
-	Section Break	فاصل مقطعي
+	Section Break	فاصل قسم
 	Section Breaks	فواصل الأقسام
 	Section Character	حرف القسم (§)
 	Section Mark	علامة القسم
@@ -1896,7 +1896,7 @@
 	Select a picture, shape, chart or table to describe it.	حدد صورة أو شكلًا أو مخططًا أو جدولًا لوصفه.
 	Select recipients first to choose from their fields.	حدد المستلمين أولًا للاختيار من حقولهم.
 	Select recipients first to match their fields.	حدد المستلمين أولًا لمطابقة حقولهم.
-	Select text, then tick who can still edit it.	حدد نصًا، ثم حدد من يمكنه تحريره.
+	Select text, then tick who can still edit it.	حدد نصًا، ثم اختر من لا يزال بإمكانه تحريره.
 	Select\nRecipients	تحديد\nالمستلمين
 	Selected Fields	الحقول المحددة
 	Selected pages	الصفحات المحددة
@@ -1958,7 +1958,7 @@
 	Show all revisions inline	إظهار كل التغييرات ضمن النص
 	Show changes at:	إظهار التغييرات على مستوى:
 	Show changes in:	إظهار التغييرات في:
-	Show documents with their colours inverted, like View › Switch Modes. Saving, printing and PDFs are unchanged.	اعرض المستندات بألوان معكوسة، مثل عرض › تبديل الأوضاع. لا يتغير الحفظ ولا الطباعة ولا ملفات PDF.
+	Show documents with their colours inverted, like View › Switch Modes. Saving, printing and PDFs are unchanged.	يعرض المستندات بألوان معكوسة، مثل عرض › تبديل الأوضاع. لا يتغير الحفظ ولا الطباعة ولا ملفات PDF.
 	Show every bibliography field	إظهار كل حقول قائمة المراجع
 	Show in the Styles gallery	الإظهار في معرض الأنماط
 	Show only comments and formatting in balloons	إظهار التعليقات والتنسيق فقط في الفقاعات
@@ -2092,7 +2092,7 @@
 	Straight Arrow Connector	موصل مستقيم بسهم
 	Straight Connector	موصل مستقيم
 	Strikethrough	يتوسطه خط
-	Stroke {n} of {total}	الضربة {n} من {total}
+	Stroke {n} of {total}	ضربة القلم {n} من {total}
 	Strong	قوي
 	Structure Actions	إجراءات البنية
 	Structures	البنى
@@ -2185,7 +2185,7 @@
 	Text Box	مربع نص
 	Text Direction	اتجاه النص
 	Text Effects	تأثيرات النص
-	Text Effects and Typography	تأثيرات النص والطباعة
+	Text Effects and Typography	تأثيرات النص وفن الخط
 	Text Fill	تعبئة النص
 	Text Highlight Color	لون تمييز النص
 	Text Outline	حد النص
@@ -2242,7 +2242,7 @@
 	Tilde	علامة التموج
 	Tips ({n})	التلميحات ({n})
 	Title	العنوان الرئيسي
-preview	Title	عنوان
+preview	Title	رئيسي
 	Title Bar	شريط العنوان
 	Title from the document properties	العنوان من خصائص المستند
 	Title:	العنوان:
@@ -2343,8 +2343,8 @@ preview	Title	عنوان
 	Update fields before printing	تحديث الحقول قبل الطباعة
 	Update to Match	تحديث للمطابقة
 	Update to Match Selection	تحديث ليطابق التحديد
-	Use "a" before a consonant sound	استخدم «a» قبل صوت ساكن
-	Use "an" before a vowel sound	استخدم «an» قبل صوت متحرك
+	Use "a" before a consonant sound	استخدام «a» قبل صوت ساكن
+	Use "an" before a vowel sound	استخدام «an» قبل صوت متحرك
 	Use an Existing List…	استخدام قائمة موجودة…
 	Use system setting	استخدام إعداد النظام
 	Use the Insert key to switch overtype on and off	استخدام المفتاح Insert لتشغيل الاستبدال أثناء الكتابة وإيقافه
@@ -2374,7 +2374,7 @@ preview	Title	عنوان
 	Volume Integral	تكامل حجمي
 	Volume Integral with Limits	تكامل حجمي بحدود
 	Volume Integral with Stacked Limits	تكامل حجمي بحدود مكدسة
-	W:	ع:
+	W:	العرض:
 	Waiting for Zotero…	بانتظار Zotero…
 	Warm Gradient with Outline	تدرج دافئ مع حد
 	Warnings ({n})	التحذيرات ({n})
