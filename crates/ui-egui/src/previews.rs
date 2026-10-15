@@ -701,7 +701,14 @@ mod tests {
         let ar = crate::i18n::Lang::from_code("ar").unwrap();
         crate::i18n::set_current(ar);
         let texts: Vec<String> = style_set_sample().iter().filter_map(|b| if let Block::Para(p) = b { Some(p.plain_text()) } else { None }).collect();
+        // ar.tsv's only `preview` entry is one word («رئيسي»), which reads the same in both
+        // orders; the contextual path is shown on a multi-word value through its fallback to the
+        // plain entry (Title: «العنوان الرئيسي»).
+        let via_context = crate::i18n::tc_logical("no such context", "Title").to_string();
+        let drawn = crate::i18n::tc("no such context", "Title").to_string();
         crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(via_context, "العنوان الرئيسي");
+        assert_ne!(drawn, via_context, "the draw-order value differs, so the probe means something");
         // As ar.tsv writes them (logical order).
         assert_eq!(texts, ["رئيسي", "عنوان 1", "نص أساسي في فقرة قصيرة لإظهار التباعد."]);
         assert_ne!(texts[1], crate::i18n::tr(ar, "Heading 1"), "the draw-order value differs, so the probe means something");

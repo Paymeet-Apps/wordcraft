@@ -174,7 +174,8 @@ fn nav(app: &mut WordApp, ui: &mut Ui) {
                 } else {
                     let (hit_from, hit_to) = (a.off.saturating_sub(from), b.off.saturating_sub(from));
                     let measure = |s: &str| ui.fonts_mut(|f| f.layout_no_wrap(s.to_string(), semibold(12.0), egui::Color32::WHITE).size().x);
-                    let base_rtl = p.props.bidi.unwrap_or_else(|| crate::bidi::first_strong_is_rtl(&p.text));
+                    // The paragraph's direction as the page lays it out (its style's too).
+                    let base_rtl = app.session.doc.styles.resolve_para(&p.props).bidi;
                     bidi_snippet(&mut job, snippet, base_rtl, (hit_from, hit_to), ui.available_width(), measure, &plain, &marked);
                 }
                 job.wrap.max_width = ui.available_width();
@@ -380,18 +381,22 @@ fn styles(app: &mut WordApp, ui: &mut Ui) {
         let _ = app.run("styles.inspector", json!({}));
     }
     ui.separator();
-    let mut list: Vec<(String, String, bool)> = app
+    // Sorted by the names in reading order; only the shown name is in draw order.
+    let mut list: Vec<(String, String, String, bool)> = app
         .session
         .doc
         .styles
         .styles
         .iter()
         .filter(|s| !s.hidden && s.kind != wordcraft_doc::StyleKind::Table)
-        .map(|s| (s.id.clone(), crate::i18n::style_name(s), s.kind == wordcraft_doc::StyleKind::Character))
+        .map(|s| {
+            let key = crate::i18n::lowercase(&crate::i18n::style_name_logical(s));
+            (key, s.id.clone(), crate::i18n::style_name(s), s.kind == wordcraft_doc::StyleKind::Character)
+        })
         .collect();
-    list.sort_by_key(|s| s.1.to_lowercase());
+    list.sort_by(|a, b| a.0.cmp(&b.0));
     egui::ScrollArea::vertical().show(ui, |ui| {
-        for (id, name, is_char) in list {
+        for (_, id, name, is_char) in list {
             crate::rtl::row(ui, |ui| {
                 let r = ui.selectable_label(id == cur, &name);
                 ui.with_layout(crate::rtl::end_layout(egui::Align::Center), |ui| {
@@ -506,6 +511,9 @@ pub(crate) fn comment_editor(app: &mut WordApp, ui: &mut Ui, id: u32, font: Opti
         let font = font.unwrap_or_else(|| egui::TextStyle::Body.resolve(ui.style()));
         let r = user_text_block(ui, &text, &font).on_hover_cursor(egui::CursorIcon::Text);
         if r.clicked() {
+            // Hold the keyboard until the field takes it next frame, so the click doesn't count as
+            // one on empty chrome (which hands focus back to the page).
+            r.request_focus();
             ui.data_mut(|d| d.insert_temp(open_key, true));
             ui.data_mut(|d| d.insert_temp(egui::Id::new(("comment_edit_focus", id)), true));
             ui.ctx().request_repaint();
@@ -1033,7 +1041,6 @@ mod chrome_text_tests {
         assert!(h.query_by_label("مقدمة 1").is_none(), "not in logical order");
     }
 
-    /// Latin headings are drawn exactly as before.
     /// A long Arabic heading is cut at its logical end: the drawn line starts (at the left) with
     /// "…" and keeps the heading's first word, and the pane keeps its width.
     #[test]
@@ -1058,6 +1065,29 @@ mod chrome_text_tests {
         assert!(drawn[0].starts_with('…') && drawn[0].ends_with("مقدمة"), "cut at the logical end: {drawn:?}");
     }
 
+    /// Editing an Arabic comment shown in bidi order writes the typed text, in reading order,
+    /// back to the document: the reordering is display only.
+    #[test]
+    fn editing_an_arabic_comment_saves_logical_text() {
+        let mut a = app_with("Body");
+        a.run("select.all", json!({})).unwrap();
+        a.run("review.newComment", json!({"text": "راجع هذه الفقرة"})).unwrap();
+        a.run("view.commentsPane", json!({"value": true})).unwrap();
+        let mut h = harness(a);
+        h.get_by_label(&visual("راجع هذه الفقرة", true)).click();
+        h.run_steps(4);
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+        h.run_steps(1);
+        h.get_by_value("راجع هذه الفقرة").type_text("نص جديد (مهم)");
+        h.run_steps(2);
+        h.key_press(egui::Key::Escape);
+        h.run_steps(4);
+        let a = h.state();
+        let part = a.session.doc.comments.values().next().map(|c| c.part).unwrap();
+        assert_eq!(a.session.doc.plain_text(wordcraft_doc::StoryRef::Part(part)).trim_end(), "نص جديد (مهم)");
+        assert!(h.query_by_label(&visual("نص جديد (مهم)", true)).is_some(), "shown in bidi order again");
+    }
+
     /// Clicking an Arabic comment's text opens its text field, holding the logical text.
     #[test]
     fn clicking_an_arabic_comment_edits_it() {
@@ -1073,6 +1103,7 @@ mod chrome_text_tests {
         assert!(h.query_by_value("راجع هذه الفقرة").is_some(), "the field holds the comment's text");
     }
 
+    /// Latin headings are drawn exactly as before.
     #[test]
     fn latin_headings_are_unchanged_in_the_navigation_pane() {
         let mut a = app_with("Introduction (part 1)");
@@ -1093,6 +1124,49 @@ mod chrome_text_tests {
         let h = harness(a);
         let drawn = visual(text, true);
         assert!(h.query_by_label(&drawn).is_some(), "the result draws as {drawn:?}");
+    }
+
+    /// The Styles pane sorts by the names in reading order, not by their draw order: «أمثلة»
+    /// comes before «بيان 1», though drawn, «بيان 1» starts with its digit.
+    #[test]
+    fn styles_pane_sorts_arabic_names_in_reading_order() {
+        let mut a = app_with("Body");
+        for (id, name) in [("B1", "بيان 1"), ("A", "أمثلة")] {
+            a.session.doc.styles.upsert(wordcraft_doc::styles::Style {
+                id: id.into(),
+                name: name.into(),
+                kind: wordcraft_doc::styles::StyleKind::Paragraph,
+                ..Default::default()
+            });
+        }
+        a.run("view.stylesPane", json!({"value": true})).unwrap();
+        let h = harness(a);
+        let y = |label: &str| h.get_by_label(label).rect().min.y;
+        assert!(y("أمثلة") < y(&visual("بيان 1", true)), "«أمثلة» is listed first");
+    }
+
+    /// The result line takes the paragraph's direction as laid out, including a right-to-left
+    /// direction that comes from its style, not only from direct formatting.
+    #[test]
+    fn find_results_follow_a_style_s_right_to_left_direction() {
+        let text = "PDF مرحبا بكم";
+        let mut a = app_with(text);
+        let para = wordcraft_doc::ParaProps { bidi: Some(true), ..Default::default() };
+        a.session.doc.styles.upsert(wordcraft_doc::styles::Style {
+            id: "RtlBody".into(),
+            name: "RtlBody".into(),
+            kind: wordcraft_doc::styles::StyleKind::Paragraph,
+            para,
+            ..Default::default()
+        });
+        a.run("para.style", json!({"style": "RtlBody"})).unwrap();
+        a.run("view.navigationPane", json!({"value": true})).unwrap();
+        a.session.run("edit.find", &json!({"text": "مرحبا"})).unwrap();
+        a.ui.nav_tab = "results".into();
+        let h = harness(a);
+        let drawn = visual(text, true);
+        assert_ne!(drawn, visual(text, false), "the probe must tell the two directions apart");
+        assert!(h.query_by_label(&drawn).is_some(), "the result draws right to left as {drawn:?}");
     }
 
     #[test]

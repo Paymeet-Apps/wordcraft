@@ -316,9 +316,10 @@ fn open_list(app: &mut WordApp, ui: &mut Ui) {
             t.accent,
         );
         let start = rtl::start_align2(Align::Center);
-        // Document names in their own direction (an Arabic name reads right to left in any
-        // interface language); the folder path left to right, as paths are written.
-        let (name, path) = (crate::i18n::user_text(&name), crate::bidi::visual(&p, false));
+        // File names in the interface's direction, as file managers show them (Ruling R22: in
+        // English «تقرير مالي.docx» keeps ".docx" at the right); the folder path left to right,
+        // as paths are written. Either way an Arabic name reads right to left.
+        let (name, path) = (crate::bidi::visual(&name, rtl::is_rtl()), crate::bidi::visual(&p, false));
         ui.painter().text(pos2(rtl::x(r, r.min.x + 40.0), r.min.y + 13.0), start, name, medium(13.0), t.text);
         ui.painter().text(pos2(rtl::x(r, r.min.x + 40.0), r.min.y + 29.0), start, path, regular(11.0), t.text_dim);
         if resp.clicked() {
@@ -521,7 +522,8 @@ mod tests {
     }
 
     /// Recent documents named in Arabic read right to left, in an English interface too
-    /// (L10N-AR.14): the name in its own direction, the folder path left to right.
+    /// (L10N-AR.14). The name takes the interface's direction (Ruling R22): in English
+    /// ".docx" stays at the right, as on the path line under it.
     #[test]
     fn recent_file_names_with_arabic_are_reordered() {
         let path = "C:/Reports/تقرير مالي.docx";
@@ -537,8 +539,9 @@ mod tests {
             a,
         );
         h.run_steps(4);
-        let name = crate::bidi::visual("تقرير مالي.docx", true);
+        let name = crate::bidi::visual("تقرير مالي.docx", false);
         assert_ne!(name, "تقرير مالي.docx");
+        assert!(name.ends_with(".docx"), "{name:?}");
         assert_eq!(crate::rtl::text_rects(h.output(), &name).len(), 1, "the name draws as {name:?}");
         let shown_path = crate::bidi::visual(path, false);
         assert_eq!(crate::rtl::text_rects(h.output(), &shown_path).len(), 1, "the path draws as {shown_path:?}");

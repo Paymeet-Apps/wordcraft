@@ -362,7 +362,8 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
                 } else {
                     tl!("Not saved")
                 };
-                caption_title(&app.title_stem(), status)
+                // A file's name, or the document's Title property (text, not a file name).
+                caption_title(&app.title_stem(), app.session.path.is_some(), status)
             };
             let font = TypeRung::Chrome.semibold();
             let track = TypeRung::Chrome.tracking();
@@ -579,15 +580,20 @@ impl WordApp {
 }
 
 /// The caption's `name — status`, in draw order. The name (logical, from `title_stem`) is
-/// isolated in its own direction, so an Arabic file name reads right to left in an English
-/// caption; under RTL the whole line reads from the right, the status (draw-order catalog text)
-/// at its left end.
-fn caption_title(name: &str, status: &str) -> String {
-    if !rtl::is_rtl() {
-        return format!("{} — {status}", crate::i18n::user_text(name));
+/// isolated: a file name in the interface's direction, as file managers show file names (Ruling
+/// R22: in English «تقرير final» keeps "final" at the right), a Title property or the untitled
+/// name in its own direction. Under RTL the whole line reads from the right, the status
+/// (draw-order catalog text) at its left end.
+fn caption_title(name: &str, file_name: bool, status: &str) -> String {
+    let rtl = rtl::is_rtl();
+    if !rtl {
+        let name = if file_name { crate::bidi::visual(name, false) } else { crate::i18n::user_text(name) };
+        return format!("{name} — {status}");
     }
     let status = crate::i18n::logical(status).unwrap_or(status);
-    crate::bidi::visual(&format!("\u{2068}{name}\u{2069} — {status}"), true).into_owned()
+    // RLI for a file name (the interface's direction), FSI (its own) otherwise.
+    let open = if file_name { '\u{2067}' } else { '\u{2068}' };
+    crate::bidi::visual(&format!("{open}{name}\u{2069} — {status}"), true).into_owned()
 }
 
 #[cfg(test)]

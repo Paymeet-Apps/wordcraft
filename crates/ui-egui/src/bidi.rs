@@ -187,7 +187,7 @@ fn visual_line(line: &str, base_rtl: bool, out: &mut String) {
 /// base, a single right-to-left run, or text beyond the 64 KiB cap. The output holds no bidi
 /// control characters.
 pub(crate) fn visual(s: &str, base_rtl: bool) -> Cow<'_, str> {
-    if s.len() > MAX_LEN || (!base_rtl && !s.chars().any(|c| is_strong_rtl(c) || is_bidi_control(c))) {
+    if s.len() > MAX_LEN || (!base_rtl && !has_rtl(s)) {
         return Cow::Borrowed(s);
     }
     let mut out = String::with_capacity(s.len());
@@ -212,24 +212,40 @@ pub(crate) fn own(s: &str) -> Cow<'_, str> {
     visual(s, first_strong_is_rtl(s))
 }
 
-/// [`visual`] for a line whose parts are styled differently (a find hit inside its context): the
-/// byte ranges of `line` in the order they are drawn, each with whether its characters are
-/// mirrored (brackets in a right-to-left run). Bidi control characters stay inside the ranges;
-/// the caller drops them ([`piece_text`]). Callers may split a range at their own boundaries:
-/// the characters inside one are always in logical order. `{name}` tokens get no special
-/// treatment (this is for document text). One range for text beyond the 64 KiB cap.
-pub(crate) fn visual_pieces(line: &str, base_rtl: bool) -> Vec<(std::ops::Range<usize>, bool)> {
-    if line.len() > MAX_LEN || (!base_rtl && !line.chars().any(|c| is_strong_rtl(c) || is_bidi_control(c))) {
-        return vec![(0..line.len(), false)];
+/// [`visual`] for text whose parts are styled differently (a find hit inside its context): the
+/// byte ranges of `text` in the order they are drawn, each with whether its characters are
+/// mirrored (brackets in a right-to-left run). As in `visual`, each `\n`-separated line (a manual
+/// line break) is reordered on its own, and every `\n` is a piece of its own in place. Bidi
+/// control characters stay inside the ranges; the caller drops them ([`piece_text`]). Callers may
+/// split a range at their own boundaries: the characters inside one are always in logical order.
+/// `{name}` tokens get no special treatment (this is for document text). One range for text
+/// beyond the 64 KiB cap.
+pub(crate) fn visual_pieces(text: &str, base_rtl: bool) -> Vec<(std::ops::Range<usize>, bool)> {
+    if text.len() > MAX_LEN || (!base_rtl && !has_rtl(text)) {
+        return vec![(0..text.len(), false)];
     }
+    let mut out = Vec::new();
+    let mut start = 0usize;
+    for (n, line) in text.split('\n').enumerate() {
+        if n > 0 {
+            out.push((start.saturating_sub(1)..start, false));
+        }
+        line_pieces(line, start, base_rtl, &mut out);
+        start = start.saturating_add(line.len()).saturating_add(1);
+    }
+    out
+}
+
+/// The pieces of one line (no `\n`) starting at byte `offset` of the whole text.
+fn line_pieces(line: &str, offset: usize, base_rtl: bool, out: &mut Vec<(std::ops::Range<usize>, bool)>) {
+    let at = |r: std::ops::Range<usize>| offset.saturating_add(r.start)..offset.saturating_add(r.end);
     let base = if base_rtl { Level::rtl() } else { Level::ltr() };
     let info = BidiInfo::new(line, Some(base));
-    let mut out = Vec::new();
     for para in &info.paragraphs {
         let (levels, runs) = info.visual_runs(para, para.range.clone());
         for run in runs {
             if !levels.get(run.start).is_some_and(|l| l.is_rtl()) {
-                out.push((run, false));
+                out.push((at(run), false));
                 continue;
             }
             // As `push_rtl_run`: segments reversed, strong-RTL ones as they are, the rest
@@ -246,10 +262,9 @@ pub(crate) fn visual_pieces(line: &str, base_rtl: bool) -> Vec<(std::ops::Range<
                     _ => segments.push((start, end, !control && (is_strong_rtl(c) || is_arabic_block(c)))),
                 }
             }
-            out.extend(segments.iter().rev().map(|&(a, b, rtl)| (a..b, !rtl)));
+            out.extend(segments.iter().rev().map(|&(a, b, rtl)| (at(a..b), !rtl)));
         }
     }
-    out
 }
 
 /// The text of one [`visual_pieces`] range (or part of one): bidi controls dropped, brackets
@@ -388,6 +403,11 @@ mod tests {
             "\u{200F}مرحبا (x)",
             "مرحبا، عالم «نعم»",
             "\u{0651}\u{064E}ب",
+            // A manual line break (Shift+Enter) inside a paragraph stays where it is.
+            "مرحبا\nabc",
+            "abc\r\nمرحبا",
+            "(مهم)\nنص",
+            "مرحبا\n\nنص (x)\n",
         ] {
             for base in [false, true] {
                 let joined: String =

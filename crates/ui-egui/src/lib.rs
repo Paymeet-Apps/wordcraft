@@ -2059,18 +2059,34 @@ mod tests {
         assert_eq!(found, 1, "the caption draws {caption:?}");
     }
 
-    /// An Arabic file name in an English interface: the caption reads it right to left, and the
+    /// An Arabic file name in an English interface: the caption reads it right to left, in the
+    /// interface's direction like a file manager (Ruling R22: "final" stays at the right), and the
     /// status after it stays where English puts it.
     #[test]
     fn arabic_file_name_reads_in_order_in_an_english_caption() {
         let mut a = app();
-        a.session.path = Some("C:/Reports/تقرير مالي.docx".into());
+        a.session.path = Some("C:/Reports/تقرير final.docx".into());
         let mut h = harness(a);
         h.run_steps(4);
-        let caption = format!("{} — Saved", crate::bidi::visual("تقرير مالي", true));
+        let stem = crate::bidi::visual("تقرير final", false);
+        assert!(stem.ends_with("final"), "{stem:?}");
+        let caption = format!("{stem} — Saved");
         assert_eq!(crate::rtl::text_rects(h.output(), &caption).len(), 1, "the caption draws {caption:?}");
-        assert_eq!(h.state().title_stem(), "تقرير مالي");
-        assert!(h.state().sent_title.starts_with("تقرير مالي"), "the OS title gets reading order");
+        assert_eq!(h.state().title_stem(), "تقرير final");
+        assert!(h.state().sent_title.starts_with("تقرير final"), "the OS title gets reading order");
+    }
+
+    /// A Title property is text, not a file name: it keeps its own direction (an Arabic title
+    /// reads from the right even in an English caption).
+    #[test]
+    fn arabic_title_property_keeps_its_own_direction_in_the_caption() {
+        let mut a = app();
+        a.session.doc.core.title = "تقرير final".into();
+        let mut h = harness(a);
+        h.run_steps(4);
+        let caption = format!("{} — Not saved", crate::bidi::visual("تقرير final", true));
+        assert!(caption.starts_with("final"), "{caption:?}");
+        assert_eq!(crate::rtl::text_rects(h.output(), &caption).len(), 1, "the caption draws {caption:?}");
     }
 
     fn app() -> WordApp {

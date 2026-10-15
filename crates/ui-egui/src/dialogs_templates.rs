@@ -229,7 +229,7 @@ pub fn organizer(app: &mut WordApp, ui: &mut Ui, f: &mut OrganizerForm) -> bool 
         });
         rtl::column(ui, |ui| {
             let name = std::path::Path::new(&f.file).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "—".into());
-            ui.label(egui::RichText::new(crate::i18n::user_text(&name)).font(semibold(12.5)))
+            ui.label(egui::RichText::new(crate::bidi::visual(&name, rtl::is_rtl())).font(semibold(12.5)))
                 .on_hover_text(crate::bidi::visual(&f.file, false).into_owned());
             list_frame(ui, "organizer_other", &mut |ui| {
                 for (n, ty, builtin) in &f.other {

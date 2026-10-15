@@ -538,6 +538,27 @@ pub fn style_name(style: &wordcraft_doc::Style) -> String {
     if style.builtin { builtin_style_name(&style.name) } else { user_text(&style.name).into_owned() }
 }
 
+/// [`style_name`] in reading (logical) order, for sorting and comparing: the built-in name's
+/// catalog text before it is converted to draw order, an author's name as written.
+pub fn style_name_logical(style: &wordcraft_doc::Style) -> String {
+    if !style.builtin {
+        return style.name.clone();
+    }
+    let direct = t(&style.name);
+    if direct != style.name {
+        return t_logical(&style.name).to_string();
+    }
+    for (prefix, template) in [("Heading ", "Heading {n}"), ("TOC ", "TOC {n}"), ("Index ", "Index {n}")] {
+        if let Some(n) = style.name.strip_prefix(prefix)
+            && !n.is_empty()
+            && n.chars().all(|c| c.is_ascii_digit())
+        {
+            return t_logical(template).replace("{n}", n);
+        }
+    }
+    style.name.clone()
+}
+
 /// A built-in style's English name in the current language; numbered families go through one
 /// template each (`Heading {n}`), and names without a translation stay English.
 pub fn builtin_style_name(name: &str) -> String {
