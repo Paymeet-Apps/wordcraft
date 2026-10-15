@@ -1,6 +1,6 @@
 # Where WordCraft falls short of Word
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** trivial (sample-text formulas on Enter, #1067; previously trivial: #29: copied equations as MathML, OMML open as #1297, #816; previously trivial: the Font list no longer keeps every previewed font in memory, #848; previously trivial: table column and row markers on the rulers, #700; previously trivial: table borders and the resize handle drag on the page, #217; previously trivial: formatting revisions landed, #41; previously trivial: Draw Table and Eraser landed, #303; previously minor: beta distance restated: ~15 points, ~150–230 h; previously: first version; every known shortfall from the 2026-10-10 re-measure, ranked) · **Target:** Microsoft Word (Microsoft 365) for Mac 16.113.4
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-15 · **Change:** minor (Arabic interface follow-ups ranked; previously trivial: sample-text formulas on Enter, #1067; previously trivial: #29: copied equations as MathML, OMML open as #1297, #816; previously trivial: the Font list no longer keeps every previewed font in memory, #848; previously trivial: table column and row markers on the rulers, #700; previously trivial: table borders and the resize handle drag on the page, #217; previously trivial: formatting revisions landed, #41; previously trivial: Draw Table and Eraser landed, #303; previously minor: beta distance restated: ~15 points, ~150–230 h; previously: first version; every known shortfall from the 2026-10-10 re-measure, ranked) · **Target:** Microsoft Word (Microsoft 365) for Mac 16.113.4
 
 > **Printing update:** 2026-10-12 · direct desktop printing through craft-print; details below.
 
@@ -25,7 +25,7 @@ Native save reliability: synthetic cases on macOS reproduced loss through the pr
 | 8 | **Proofing covers English, Polish, Portuguese and Italian only**; no dictionaries, grammar or hyphenation for the other ~46 languages Word proofs (text in them is left unmarked) | | `crates/proof`: English, Polish, Portuguese (pt-BR via the installed VERO dictionary, 2026-10-12) and Italian (it-IT via the installed Hunspell dictionary), a language per run (2026-10-10); Word ships 120 proofing tools; issues #25, #40, #100 | Every writer outside English, Polish, Portuguese and Italian | 20–40 | [localization-parity.md](localization-parity.md) |
 | 9 | **Password-protected files** can't be opened or saved | | #55; `docbin` detects and refuses RC4/XOR | Corporate and legal users | 6–10 | [file-format-parity.md](file-format-parity.md) |
 | 10 | **Objects**: no group (#267 open), text in a freely rotated text box (free rotation and flips landed, #332; text direction, alignment and linked text boxes landed, #369; contour wrap and wrap side landed, #354), shape effects, WordArt 3-D effects and connector routing around shapes (WordArt effects and warps and glued connectors landed, #416), dragging members inside a Drawing Canvas (the canvas landed, #344) | | [parity-checklist.md](parity-checklist.md) (Shape Format 6/6, Layout › Group) | Newsletters, flyers, reports with diagrams | 20–30 | [target-app-parity.md](target-app-parity.md) |
-| 11 | **Interface languages**: 7 of the 12 key languages missing (hi, ar, fr, id, ko, vi, pt-PT); no mirrored RTL interface; ~5% of strings still English in the translated catalogs | | [localization-parity.md](localization-parity.md) | Most of the world's writers | 50–80 | [localization-parity.md](localization-parity.md) |
+| 11 | **Interface languages**: 5 of the 12 key languages missing (hi, id, ko, vi, pt-PT); Arabic landed with a mirrored interface (partial, native review pending; follow-ups in "Arabic interface follow-ups" below); Hebrew needs a catalog; ~5% of strings still English in the translated catalogs | | [localization-parity.md](localization-parity.md) | Most of the world's writers | 50–80 | [localization-parity.md](localization-parity.md) |
 | 13 | **Charts and SmartArt editing** (editing charts and SmartArt from Word, more chart types and formatting) | | `insert.chart` and Chart Design basics landed (#409): WordCraft's own charts are editable; charts from Word stay read-only (no embedded-workbook editing), no combo/3D/radar/stock charts (charts of those types show a placeholder with their title and type, #998), axis or series formatting; Insert › SmartArt landed (#497) for graphics WordCraft makes | Reports and business documents | 35–55 | [target-app-parity.md](target-app-parity.md) |
 | 12 | **Draw tab / ink**: pens, pencil, highlighter, eraser, Select and Hide Ink landed (#307); Lasso Select, Add Pen, Ink to Shape and Ink Replay landed (#395); missing: Ink to Math, arrows in Ink to Shape, pressure, rendering/editing Word's own ink (drawing-level and direct run-level InkML content parts now survive DOCX save) | | [parity-checklist.md](parity-checklist.md) (Draw 9/11) | Pen and tablet users | 4–8 | [hardware-parity.md](hardware-parity.md) |
 | 14 | **`.doc` can't be written; Word 6/95 files refused** | | `crates/docbin` is read-only | Users exchanging files with old Word or legacy systems | 25–40 | [file-format-parity.md](file-format-parity.md) |
@@ -76,10 +76,36 @@ The same gaps grouped the way the parity documents are, for agents working in on
 - **Localization gaps:** #8, #11, #16, #17; native-speaker review of every catalog (human).
 - **Stability and performance gaps:** #3, #20.
 
+## Arabic interface follow-ups
+
+Left over from the mirrored Arabic interface (L10N-AR, 2026-10-15); kept here instead of as GitHub
+issues. Ranked by how much a reader of Arabic notices. Detail: [`localization-ar.md`](localization-ar.md),
+[`ui-parity.md`](ui-parity.md#mirrored-interface-arabic).
+
+1. **Native-speaker review of `ar.tsv`** (human): wording, terminology table, plural-free count labels. `crates/ui-egui/src/i18n/ar.tsv`.
+2. **Arabic UI font in `storytold/craft-fonts`** (owner action, ruling R3): a Noto Sans Arabic UI face (Regular, Medium, SemiBold). Until then wasm and Linux without Noto show boxes, and Windows has no weight contrast. `wordcraft_fonts::arabic_ui_fonts`, `crates/ui-egui/src/theme.rs`.
+3. **RTL caret and selection in egui `TextEdit`** (search box, size boxes, dialog fields, comments): logical order only; Home/End, arrows and selection are not bidi-aware. A comment with Arabic text is drawn as a read-only bidi block until clicked (`panes.rs`, `MAX_SHOWN_COMMENT`).
+4. **`ScrollArea` scroll bars on the left** in RTL: egui's bars stay right; our own bars already mirror (with egui's one-frame drag lag, and a stale grab if an RTL bar hides mid-drag). `rtl.rs`, `panes.rs`.
+5. **Arabic proofing**: spelling, grammar, hyphenation; also kashida. `crates/proof`; see [localization-parity.md](localization-parity.md#proofing-per-language).
+6. **Untranslated interface text**: the `untranslated_interface_text` audit fails on the unwrapped mailings label "#10   4.13 x 9.5 in" and on 24 strings that are in no catalog (pre-existing, every language); picture crop B/R/T/L, Picture Format "Border" and the table-style "Table Grid" are outside the reference key set. `crates/ui-egui/src/i18n/audit.rs`.
+7. **Shared keys need context**: "Display" (Options vs equation display mode) and "Bar" (tab stop vs overbar) share one catalog entry each. Give them distinct keys or contexts (`i18n::tc`).
+8. **Command search with Arabic queries**: the query is logical, `tl!` output is draw order (R16); compare against `i18n::logical`. Command search in `crates/ui-egui/src/lib.rs`.
+9. **Parsers accept the Arabic comma and semicolon**: page ranges (`crates/engine/src/print.rs:36`) and author lists (`crates/engine/src/citations.rs:357`); the dialog hints use ASCII separators until then.
+10. **Organizer sorts by translated names**: built-in styles are shown translated but sorted by their English names. Organizer dialog.
+11. **Find-result alignment for Arabic paragraphs**: the Navigation pane's result lines are left-aligned for Arabic snippets. `panes.rs` (`bidi_snippet`).
+12. **TOC level style list shows "TOC n"** untranslated. `dialogs_refs.rs`, TOC options.
+13. **Content-control list items** are left-aligned as a stopgap (ruling R20); right-align them. `dialogs_refs.rs`.
+14. **Combo-box internals** (arrow, popup) are not mirrored; the RTL check-box-enabled field (`rtl::checkbox_enabled`) reacts one frame late.
+15. **Mirror leftovers**: the vertical ruler and the Accessibility pane's collapse arrows stay left; the zoom slider axis stays left-to-right (the - and + buttons swap instead); at 800 pt the tab strip overlaps the Share cluster in both languages (pre-existing); the table styles strip has no direct RTL test (screenshot only).
+16. **Bidi minors** (`bidi.rs`): `wrap` splits on ASCII space only and copies per word (cap it if fed document text); a combining mark after a neutral segment can reverse before its base; a carriage return lands at the line start in RTL; `first_strong_is_rtl` ignores isolate skipping; no cache for repeated `visual()` calls; text over 64 KiB is returned unconverted.
+17. **Test and tooling hygiene**: the probe tests are inert without an installed Arabic face (CI needs Noto Sans Arabic); the language-switching test only checks glyph presence; several new tests lack a language drop guard; the dialog width bound is `max(en + 40, en x 1.15)` (ruling R21), looser than first planned; `Document1` is logical text for file names but draw-order text in the title bar (keep them apart).
+18. **Hebrew**: a catalog plus `rtl: true` on its `LangInfo`; PR #20 holds Hebrew editing fixes. Left/right wording in the catalog needs checking first.
+
 ## Revision history
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-15 | minor | Arabic interface landed (partial): gap #11 narrowed; ranked follow-ups added under "Arabic interface follow-ups" (L10N-AR.16) |
 | 2026-10-12 | trivial | Sample-text formulas on Enter (#1067) implemented; numerical limits not compared in Word |
 | 2026-10-12 | minor | Italian proofing landed (it-IT spelling from the installed Hunspell dictionary, accent-first suggestions, conservative grammar); gap #8 narrowed to the remaining languages |
 | 2026-10-12 | trivial | #2 narrowed: direct run-level `w:contentPart` InkML survives DOCX edits and repeated saves; nested group/canvas ink and native rendering remain |
