@@ -72,6 +72,14 @@ draw order (`bidi::visual`). The layout is not mirrored yet (later tasks of the 
 | AutoCorrect / AutoFormat As You Type | التصحيح التلقائي / التنسيق التلقائي أثناء الكتابة |
 | Shortcut / Ribbon tab / Group | اختصار / علامة تبويب الشريط / مجموعة |
 | Commit / PR (contributors page) | إيداع / طلب دمج |
+| Built-in styles: Heading {n} / TOC {n} / Index {n} / Subtitle / No Spacing | عنوان {n} / جدول المحتويات {n} / فهرس {n} / عنوان فرعي / بلا تباعد |
+| Emphasis / Strong / Subtle / Intense / Quote | تأكيد / قوي / خفيف / مكثف / اقتباس |
+| Grid Table / List Table / Plain Table | جدول شبكي / جدول قائمة / جدول عادي |
+| Equation: Fraction / Script / Radical / Integral / Large Operator | كسر / نص مرتفع/منخفض / جذر / تكامل / عامل كبير |
+| Bracket(s) / Parentheses / Braces / Matrix / Function / Limit | أقواس مربعة / أقواس / أقواس معقوصة / مصفوفة / دالة / النهاية |
+| Linear / Professional (equation form) | خطي / احترافي |
+| Watermarks DRAFT / CONFIDENTIAL / URGENT / SAMPLE | مسودة / سري / عاجل / نموذج |
+| Paper sizes (Letter, Legal, Executive, Tabloid, B4 (JIS)…) | kept in Latin (standard names); Envelope → مظروف |
 | Language names | Arabic adjective with the article: الإنجليزية (الولايات المتحدة)، الفرنسية (فرنسا)، العربية |
 
 ## Revision history
@@ -80,3 +88,4 @@ draw order (`bidi::visual`). The layout is not mirrored yet (later tasks of the 
 - 2026-10-14: wording fixes (Title, Citation, outlines, equation display) (L10N-AR.5).
 - 2026-10-15: dialogs part 1 (font, paragraph, layout, insert, lists, options, files) (L10N-AR.15a).
 - 2026-10-15: dialogs part 2, task panes, Backstage, credits (L10N-AR.15b).
+- 2026-10-15: built-in style names, equation gallery, watermarks, paper sizes, preview tiles (L10N-AR.15c).
