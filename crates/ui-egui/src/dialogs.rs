@@ -980,29 +980,6 @@ impl Dialog {
         }
     }
 
-    /// Whether the dialog is drawn mirrored under a right-to-left interface (its rows, grids and
-    /// buttons go through `crate::rtl`). The others still lay out left to right: an egui `Grid`
-    /// inside the right-aligned column would have no left edge to start from.
-    fn mirrored(&self) -> bool {
-        match self {
-            Dialog::Insert(d) => matches!(
-                d.as_ref(),
-                crate::dialogs_insert::InsertDialog::Columns(_)
-                    | crate::dialogs_insert::InsertDialog::Symbol(_)
-                    | crate::dialogs_insert::InsertDialog::Field(_)
-            ),
-            Dialog::Refs(_)
-            | Dialog::Review(_)
-            | Dialog::CustomizeKeyboard { .. }
-            | Dialog::CustomizeRibbon { .. }
-            | Dialog::Control { .. }
-            | Dialog::NoteOptions { .. }
-            | Dialog::Templates { .. }
-            | Dialog::Organizer { .. } => false,
-            _ => true,
-        }
-    }
-
     /// The dialog that shows a report command's result: Match Fields, Check for Errors.
     pub fn report(id: &str, v: &Value) -> Option<Dialog> {
         let strings = |k: &str| -> Vec<String> {
@@ -1400,8 +1377,8 @@ pub fn show(app: &mut WordApp, ctx: &egui::Context) {
     let id = egui::Id::new(("dialog", title));
     let shown = place_dialog(ctx, id, egui::Window::new(tl!(title)).id(id).collapsible(false).resizable(false)).open(&mut open).show(ctx, |ui| {
         ui.set_min_width(340.0);
-        if crate::rtl::is_rtl() && d.mirrored() {
-            // Captions, headings and rows start at the right.
+        if crate::rtl::is_rtl() {
+            // Every dialog is mirrored: captions, headings and rows start at the right.
             close = crate::rtl::column(ui, |ui| body(app, ui, &mut d)).inner;
         } else {
             close = body(app, ui, &mut d);
@@ -4353,5 +4330,228 @@ mod tests {
             assert!(area.is_finite() && screen.expand(1.0).contains_rect(area), "{purpose}: {area:?}");
         }
         crate::i18n::set_current(crate::i18n::Lang::EN);
+    }
+
+    /// How a part-2 dialog ends: `Ok(primary, other)`, a confirming button in a row with Cancel
+    /// (or Close): right of it in Arabic, left of it in English; or `Close`, a lone Close at the
+    /// end edge (the left in Arabic, the right in English).
+    #[derive(Clone, Copy)]
+    enum Ends {
+        Ok(&'static str, &'static str),
+        Close,
+    }
+
+    /// A part-2 dialog: its name in failures, how to open it, how it ends.
+    type Part2 = (&'static str, fn(&mut WordApp), Ends);
+
+    fn named(a: &mut WordApp, name: &str) {
+        a.run("ui.dialog", json!({"name": name})).unwrap();
+        assert!(a.dialog.is_some(), "{name} opens");
+    }
+
+    fn refs(a: &mut WordApp, d: crate::dialogs_refs::RefsDialog) {
+        a.dialog = Some(Dialog::Refs(Box::new(d)));
+    }
+
+    fn part2_dialogs() -> Vec<Part2> {
+        use crate::dialogs_refs::{CaptionForm, RefsDialog, SourceForm, TocForm};
+        vec![
+            ("customizeKeyboard", |a| named(a, "customizeKeyboard"), Ends::Close),
+            ("customizeRibbon", |a| named(a, "customizeRibbon"), Ends::Close),
+            ("customizeQuickAccess", |a| named(a, "customizeQuickAccess"), Ends::Close),
+            ("noteOptions", |a| named(a, "noteOptions"), Ends::Ok("Insert Footnote", "Cancel")),
+            ("templates", |a| named(a, "templates"), Ends::Ok("OK", "Cancel")),
+            ("organizer", |a| named(a, "organizer"), Ends::Close),
+            (
+                "controlProperties",
+                |a| {
+                    a.run("developer.dropDown", json!({})).unwrap();
+                    named(a, "controlProperties");
+                },
+                Ends::Ok("OK", "Cancel"),
+            ),
+            ("insertSmartArt", |a| named(a, "insertSmartArt"), Ends::Ok("OK", "Cancel")),
+            ("insertChart", |a| named(a, "insertChart"), Ends::Ok("OK", "Cancel")),
+            (
+                "changeChartType",
+                |a| {
+                    a.run("insert.chart", json!({"type": "column"})).unwrap();
+                    named(a, "changeChartType");
+                },
+                Ends::Ok("OK", "Cancel"),
+            ),
+            (
+                "chartData",
+                |a| {
+                    a.run("insert.chart", json!({"type": "column"})).unwrap();
+                    named(a, "chartData");
+                },
+                Ends::Ok("OK", "Cancel"),
+            ),
+            ("caption", |a| named(a, "caption"), Ends::Ok("OK", "Cancel")),
+            (
+                "captionNumbering",
+                |a| {
+                    let f = CaptionForm::read(a);
+                    refs(a, RefsDialog::CaptionNumbering { was: Box::new(f.clone()), form: f });
+                },
+                Ends::Ok("OK", "Cancel"),
+            ),
+            ("newLabel", |a| refs(a, RefsDialog::NewLabel(CaptionForm::read(a))), Ends::Ok("OK", "Cancel")),
+            ("index", |a| named(a, "index"), Ends::Ok("OK", "Cancel")),
+            ("markEntry", |a| named(a, "markEntry"), Ends::Ok("Mark", "Close")),
+            ("toc", |a| named(a, "toc"), Ends::Ok("OK", "Cancel")),
+            (
+                "tocOptions",
+                |a| {
+                    let f = TocForm::read(a);
+                    refs(a, RefsDialog::TocOptions { was: Box::new(f.clone()), form: f });
+                },
+                Ends::Ok("OK", "Cancel"),
+            ),
+            ("tocStyles", |a| refs(a, RefsDialog::TocStyles { form: TocForm::read(a), level: 1 }), Ends::Ok("OK", "Cancel")),
+            ("sourceManager", |a| named(a, "sourceManager"), Ends::Close),
+            ("createSource", |a| named(a, "createSource"), Ends::Ok("OK", "Cancel")),
+            (
+                "editSource",
+                |a| {
+                    let mut f = SourceForm::new(false, true);
+                    f.edit = true;
+                    refs(a, RefsDialog::Source(Box::new(f)));
+                },
+                Ends::Ok("OK", "Cancel"),
+            ),
+            ("compare", |a| named(a, "compare"), Ends::Ok("OK", "Cancel")),
+            ("combine", |a| named(a, "combine"), Ends::Ok("OK", "Cancel")),
+            ("autoCorrect", |a| named(a, "autoCorrect"), Ends::Ok("OK", "Cancel")),
+        ]
+    }
+
+    /// The buttons labelled `label` inside `area` (the open dialog's window).
+    fn dialog_buttons(h: &egui_kittest::Harness<'_, WordApp>, area: egui::Rect, label: &str) -> Vec<egui::Rect> {
+        use egui_kittest::kittest::Queryable;
+        h.query_all_by_role_and_label(egui::accesskit::Role::Button, label).map(|n| n.rect()).filter(|r| area.contains_rect(*r)).collect()
+    }
+
+    /// Every dialog of `dialogs_chart`, `dialogs_controls`, `dialogs_keyboard`, `dialogs_notes`,
+    /// `dialogs_refs`, `dialogs_review`, `dialogs_ribbon`, `dialogs_smart_art` and
+    /// `dialogs_templates`, for a few frames in Arabic and in English: nothing panics, every
+    /// window is finite, inside the screen whenever it is in English, no more than 40 pt wider in
+    /// Arabic, and it ends mirrored:
+    /// OK right of Cancel (a lone Close at the left) in Arabic, the reverse in English.
+    #[test]
+    fn every_dialog_opens_in_arabic_without_panicking_and_ok_is_rightmost() {
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(1440.0, 900.0));
+        let mut failures = Vec::new();
+        for (name, setup, ends) in part2_dialogs() {
+            let mut widths = Vec::new();
+            let mut inside = Vec::new();
+            for lang in ["ar", "en"] {
+                let mut h = rtl_harness(lang, setup);
+                h.run_steps(3);
+                let l = crate::i18n::Lang::from_code(lang).unwrap();
+                let title = h.state().dialog.as_ref().map(Dialog::title).unwrap_or_else(|| panic!("{name} ({lang}) is still open"));
+                let area = h.ctx.memory(|m| m.area_rect(egui::Id::new(("dialog", title))));
+                let area = area.unwrap_or_else(|| panic!("{name} ({lang}): the dialog is shown"));
+                if !area.is_finite() {
+                    failures.push(format!("{name} ({lang}): {area:?}"));
+                    continue;
+                }
+                inside.push(screen.expand(1.0).contains_rect(area));
+                widths.push(area.width());
+                let arabic = lang == "ar";
+                match ends {
+                    Ends::Ok(primary, other) => {
+                        let ok = dialog_buttons(&h, area, crate::i18n::tr(l, primary));
+                        let cancel = dialog_buttons(&h, area, crate::i18n::tr(l, other));
+                        let pair = ok.iter().find_map(|o| cancel.iter().find(|c| (c.center().y - o.center().y).abs() < 6.0).map(|c| (*o, *c)));
+                        match pair {
+                            None => failures.push(format!("{name} ({lang}): no {primary} and {other} in one row ({ok:?}, {cancel:?})")),
+                            Some((o, c)) if arabic && o.left() < c.right() - 0.5 => {
+                                failures.push(format!("{name} (ar): {primary} {o:?} is not right of {other} {c:?}"));
+                            }
+                            Some((o, c)) if !arabic && o.right() > c.left() + 0.5 => {
+                                failures.push(format!("{name} (en): {primary} {o:?} is not left of {other} {c:?}"));
+                            }
+                            _ => {}
+                        }
+                    }
+                    Ends::Close => {
+                        let close = dialog_buttons(&h, area, crate::i18n::tr(l, "Close"));
+                        match close.last() {
+                            None => failures.push(format!("{name} ({lang}): no Close button")),
+                            Some(c) if arabic == (c.center().x > area.center().x) => {
+                                failures.push(format!("{name} ({lang}): Close {c:?} is on the wrong side of {area:?}"));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            // Insert SmartArt runs past the bottom in English too (its separators stretch it): a
+            // pre-existing layout bug, not a mirroring one.
+            if let [false, true] = inside[..] {
+                failures.push(format!("{name}: inside the screen in english, not in arabic"));
+            }
+            if let [ar, en] = widths[..]
+                && ar > en + 40.0
+            {
+                failures.push(format!("{name}: {ar} pt wide in arabic, {en} pt in english"));
+            }
+        }
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    /// The other windows and pages of part 2 in Arabic and English: Read Aloud (its Speed caption
+    /// at the start edge, the slider after it), File › Print (settings at the start edge, the
+    /// preview after them), the Restrict Editing pane and the SmartArt Text Pane. Nothing panics
+    /// and each reads from the right in Arabic, from the left in English.
+    #[test]
+    fn part2_windows_and_panes_mirror_in_arabic() {
+        use egui_kittest::kittest::Queryable;
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(1440.0, 900.0));
+        let mut player_widths = Vec::new();
+        for lang in ["ar", "en"] {
+            let arabic = lang == "ar";
+            let l = crate::i18n::Lang::from_code(lang).unwrap();
+            // Read Aloud.
+            let h = rtl_harness(lang, |a| {
+                a.run("review.readAloud", json!({})).unwrap();
+                a.session.read_aloud.open = true;
+            });
+            let area = h.ctx.memory(|m| m.area_rect(egui::Id::new("read-aloud-player"))).expect("the player is shown");
+            assert!(area.is_finite() && screen.expand(1.0).contains_rect(area), "{lang}: player {area:?}");
+            player_widths.push(area.width());
+            let caption = h.get_by_label(crate::i18n::tr(l, "Speed")).rect();
+            let slider =
+                h.query_all_by_role(egui::accesskit::Role::Slider).map(|n| n.rect()).find(|r| area.contains_rect(*r)).expect("the speed slider");
+            assert_eq!(slider.center().x < caption.center().x, arabic, "{lang}: slider {slider:?}, caption {caption:?}");
+            // The caption hugs the start edge of the player (its right under RTL).
+            let gap = if arabic { area.right() - caption.right() } else { caption.left() - area.left() };
+            assert!(gap < 20.0, "{lang}: Speed {caption:?} is {gap} pt from the start edge of {area:?}");
+            // File › Print: the settings column (its Save as PDF button) at the start edge.
+            let h = rtl_harness(lang, |a| {
+                a.run("ui.backstage", json!({"value": true, "page": "print"})).unwrap();
+            });
+            let save = h.get_by_role_and_label(egui::accesskit::Role::Button, crate::i18n::tr(l, "Save these pages as PDF…")).rect();
+            assert_eq!(save.center().x > screen.center().x, arabic, "{lang}: save {save:?}");
+            // Restrict Editing (docked at the end edge) and the SmartArt Text Pane.
+            let h = rtl_harness(lang, |a| {
+                a.run("ui.dialog", json!({"name": "restrictEditing"})).unwrap();
+                a.run("insert.smartArt", json!({"layout": "hierarchy"})).unwrap();
+                a.run("smartArt.textPane", json!({"value": true})).unwrap();
+            });
+            let limit = h.get_by_label(crate::i18n::tr(l, "Limit formatting to a selection of styles")).rect();
+            assert_eq!(limit.center().x < screen.center().x, arabic, "{lang}: restrict pane check box {limit:?}");
+            let add = h.query_all_by_role_and_label(egui::accesskit::Role::Button, crate::i18n::tr(l, "Promote")).count();
+            assert_eq!(add, 1, "{lang}: the text pane is shown");
+        }
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        // Right-to-left rows wider than the player's 236 pt spilled past its left edge and the
+        // window kept growing (~412 pt against ~338 pt in English).
+        if let [ar, en] = player_widths[..] {
+            assert!(ar <= en + 40.0, "the player is {ar} pt wide in arabic, {en} pt in english");
+        }
     }
 }

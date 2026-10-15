@@ -7,10 +7,10 @@ use egui::{Ui, vec2};
 use serde::Serialize;
 use serde_json::{Value, json};
 
-use crate::WordApp;
 use crate::dialogs::{Dialog, buttons};
 use crate::file_dialogs::{AfterPick, FileDialogRequest};
 use crate::theme::{Tokens, semibold};
+use crate::{WordApp, rtl};
 
 /// The Templates and Add-ins dialog's fields.
 #[derive(Clone, Debug, Serialize)]
@@ -68,17 +68,18 @@ pub fn templates(app: &mut WordApp, ui: &mut Ui, f: &mut TemplatesForm) -> bool 
         f.path = p;
     }
     ui.label(egui::RichText::new(tl!("Document template:")).font(semibold(12.5)));
-    ui.horizontal(|ui| {
+    rtl::row(ui, |ui| {
         ui.add(egui::TextEdit::singleline(&mut f.path).desired_width(300.0));
         if ui.add_enabled(can_pick(app), egui::Button::new(tl!("Attach…"))).clicked() {
             pick(app);
         }
     });
-    ui.checkbox(&mut f.link, tl!("Automatically update document styles"));
+    rtl::checkbox(ui, &mut f.link, tl!("Automatically update document styles"));
     ui.add_space(6.0);
     let organizer = ui.button(tl!("Organizer…")).clicked();
     if !f.message.is_empty() {
-        ui.add(egui::Label::new(egui::RichText::new(f.message.as_str()).small().color(ui.visuals().error_fg_color)).wrap());
+        let color = ui.visuals().error_fg_color;
+        message(ui, &f.message, color);
     }
     let (ok, cancel) = buttons(ui, tl!("OK"));
     if organizer {
@@ -148,6 +149,21 @@ impl OrganizerForm {
     }
 }
 
+/// An error under the form, wrapping (from its first line down under RTL).
+fn message(ui: &mut Ui, text: &str, color: egui::Color32) {
+    if rtl::is_rtl() {
+        rtl::wrapped_label(ui, text, |s| egui::RichText::new(s).small().color(color));
+    } else {
+        ui.add(egui::Label::new(egui::RichText::new(text).small().color(color)).wrap());
+    }
+}
+
+/// A style in an Organizer list: its kind's glyph, then its name (the glyph at the start edge;
+/// a document's style name keeps its own direction under RTL).
+fn style_row(ty: &str, name: &str) -> String {
+    if rtl::is_rtl() { format!("{}  {}", crate::i18n::isolate(name), glyph(ty)) } else { format!("{}  {name}", glyph(ty)) }
+}
+
 fn glyph(ty: &str) -> &'static str {
     match ty {
         "character" => "a",
@@ -181,32 +197,34 @@ pub fn organizer(app: &mut WordApp, ui: &mut Ui, f: &mut OrganizerForm) -> bool 
     let mut rename = false;
     let mut browse = false;
     let left_builtin = mine.iter().find(|x| s(x, "id") == f.left).is_none_or(|x| x.get("builtIn").and_then(Value::as_bool).unwrap_or(true));
-    ui.horizontal_top(|ui| {
-        ui.vertical(|ui| {
+    rtl::row_top(ui, |ui| {
+        rtl::column(ui, |ui| {
             ui.label(egui::RichText::new(tl!("Document")).font(semibold(12.5)));
             list_frame(ui, "organizer_mine", &mut |ui| {
                 for st in &mine {
                     let id = s(st, "id");
-                    if ui.selectable_label(f.left == id, format!("{}  {}", glyph(&s(st, "type")), s(st, "name"))).clicked() {
+                    if ui.selectable_label(f.left == id, style_row(&s(st, "type"), &s(st, "name"))).clicked() {
                         f.left = id;
                         f.rename = None;
                     }
                 }
             });
         });
-        ui.vertical(|ui| {
+        rtl::column(ui, |ui| {
             ui.add_space(60.0);
             let w = vec2(96.0, 0.0);
-            copy = ui.add_enabled(!f.right.is_empty(), egui::Button::new(format!("◀ {}", tl!("Copy"))).min_size(w)).clicked();
+            // Toward this document's list: at the left, or under RTL at the right.
+            let copy_label = if rtl::is_rtl() { format!("{} ▶", tl!("Copy")) } else { format!("◀ {}", tl!("Copy")) };
+            copy = ui.add_enabled(!f.right.is_empty(), egui::Button::new(copy_label).min_size(w)).clicked();
             delete = ui.add_enabled(!left_builtin, egui::Button::new(tl!("Delete")).min_size(w)).clicked();
             rename = ui.add_enabled(!left_builtin, egui::Button::new(tl!("Rename…")).min_size(w)).clicked();
         });
-        ui.vertical(|ui| {
+        rtl::column(ui, |ui| {
             let name = std::path::Path::new(&f.file).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "—".into());
             ui.label(egui::RichText::new(name).font(semibold(12.5))).on_hover_text(f.file.as_str());
             list_frame(ui, "organizer_other", &mut |ui| {
                 for (n, ty) in &f.other {
-                    if ui.selectable_label(f.right == *n, format!("{}  {n}", glyph(ty))).clicked() {
+                    if ui.selectable_label(f.right == *n, style_row(ty, n)).clicked() {
                         f.right = n.clone();
                     }
                 }
@@ -232,7 +250,7 @@ pub fn organizer(app: &mut WordApp, ui: &mut Ui, f: &mut OrganizerForm) -> bool 
     let mut renamed = false;
     if let Some(new) = f.rename.as_mut() {
         ui.add_space(6.0);
-        ui.horizontal(|ui| {
+        rtl::row(ui, |ui| {
             ui.label(tl!("Name:"));
             let r = ui.add(egui::TextEdit::singleline(new).desired_width(220.0));
             renamed = ui.button(tl!("OK")).clicked() || (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
@@ -243,7 +261,8 @@ pub fn organizer(app: &mut WordApp, ui: &mut Ui, f: &mut OrganizerForm) -> bool 
         f.message = r.err().unwrap_or_default();
     }
     if !f.message.is_empty() {
-        ui.add(egui::Label::new(egui::RichText::new(f.message.as_str()).small().color(ui.visuals().error_fg_color)).wrap());
+        let color = ui.visuals().error_fg_color;
+        message(ui, &f.message, color);
     }
     // Escape while renaming only stops renaming.
     if f.rename.is_some() && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -254,7 +273,7 @@ pub fn organizer(app: &mut WordApp, ui: &mut Ui, f: &mut OrganizerForm) -> bool 
     ui.add_space(8.0);
     let mut close = ui.input(|i| i.key_pressed(egui::Key::Escape));
     ui.horizontal(|ui| {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        ui.with_layout(crate::rtl::end_layout(egui::Align::Center), |ui| {
             close |= ui.add(crate::widgets::primary_button(ui, tl!("Close"))).clicked();
         });
     });

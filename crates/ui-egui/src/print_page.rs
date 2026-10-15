@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use wordcraft_layout::DocLayout;
 
 use crate::theme::{Tokens, medium, regular};
-use crate::{WordApp, icons};
+use crate::{WordApp, icons, rtl};
 
 /// The Print page's settings. Not saved with the document or the UI state.
 #[derive(Clone, Debug, PartialEq)]
@@ -103,8 +103,9 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
     let current = app.session.current_pages(&lay);
     app.ui.print.preview = app.ui.print.preview.min(total.saturating_sub(1));
 
-    ui.horizontal_top(|ui| {
-        ui.vertical(|ui| {
+    // Settings at the start edge, the preview after them (the right and the left under RTL).
+    rtl::row_top(ui, |ui| {
+        rtl::column(ui, |ui| {
             ui.set_width(380.0);
             ui.spacing_mut().item_spacing.y = 8.0;
             let native = app.services.print_native.is_some();
@@ -115,12 +116,16 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
                 }
                 app.ui.print.copies = app.printing.settings.copies;
             } else if hook {
-                ui.label(tl!("Send the document straight to the system print dialog, or save a copy in another format below."));
-                ui.label(
-                    egui::RichText::new(tl!("The printer, two-sided printing and pages per sheet are chosen in that dialog.")).color(t.text_dim),
-                );
+                rtl::wrapped_label(ui, tl!("Send the document straight to the system print dialog, or save a copy in another format below."), |s| {
+                    egui::RichText::new(s)
+                });
+                rtl::wrapped_label(ui, tl!("The printer, two-sided printing and pages per sheet are chosen in that dialog."), |s| {
+                    egui::RichText::new(s).color(t.text_dim)
+                });
             } else {
-                ui.label(tl!("Save a copy in another format. Printing goes through a PDF you can print from any viewer."));
+                rtl::wrapped_label(ui, tl!("Save a copy in another format. Printing goes through a PDF you can print from any viewer."), |s| {
+                    egui::RichText::new(s)
+                });
             }
             ui.add_space(4.0);
             if hook
@@ -144,16 +149,16 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
 
             if native {
                 if app.ui.print.copies > 1 {
-                    ui.add_enabled(!app.printing.busy(), egui::Checkbox::new(&mut app.ui.print.collate, tl!("Collate copies")));
+                    rtl::checkbox_enabled(ui, !app.printing.busy(), &mut app.ui.print.collate, tl!("Collate copies"));
                 }
             } else {
                 ui.label(egui::RichText::new(tl!("Copies")).font(medium(13.0)));
-                ui.horizontal(|ui| {
+                rtl::row(ui, |ui| {
                     let mut n = app.ui.print.copies;
                     ui.add(egui::DragValue::new(&mut n).range(1..=wordcraft_engine::print::MAX_COPIES).speed(0.2));
                     app.ui.print.copies = n.clamp(1, wordcraft_engine::print::MAX_COPIES);
                     if app.ui.print.copies > 1 {
-                        ui.checkbox(&mut app.ui.print.collate, tl!("Collate copies"));
+                        rtl::checkbox(ui, &mut app.ui.print.collate, tl!("Collate copies"));
                     }
                 });
             }
@@ -194,7 +199,7 @@ pub fn show(app: &mut WordApp, ui: &mut Ui) {
             export_formats(app, ui);
         });
         ui.add_space(24.0);
-        ui.vertical(|ui| preview(app, ui, &lay, total));
+        rtl::column(ui, |ui| preview(app, ui, &lay, total));
     });
 }
 
@@ -212,7 +217,9 @@ fn preview(app: &mut WordApp, ui: &mut Ui, lay: &DocLayout, total: usize) {
         ui.painter().image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), egui::Color32::WHITE);
     }
     ui.add_space(6.0);
-    ui.horizontal(|ui| {
+    // Previous at the start edge, its chevron pointing that way (right under RTL).
+    let (back, forward) = if rtl::is_rtl() { ("chevronRight", "chevronLeft") } else { ("chevronLeft", "chevronRight") };
+    rtl::row(ui, |ui| {
         let nav = |ui: &mut Ui, icon: &str, tip: &str, enabled: bool| {
             let (r, resp) = ui.allocate_exact_size(vec2(26.0, 26.0), Sense::click());
             let col = if enabled { t.icon } else { t.text_disabled };
@@ -222,12 +229,12 @@ fn preview(app: &mut WordApp, ui: &mut Ui, lay: &DocLayout, total: usize) {
             icons::paint(ui.painter(), r.shrink(4.0), icon, col, col);
             enabled && resp.on_hover_text(tip).clicked()
         };
-        if nav(ui, "chevronLeft", tl!("Previous Page"), page > 0) {
+        if nav(ui, back, tl!("Previous Page"), page > 0) {
             app.ui.print.preview = page - 1;
         }
         let label = crate::i18n::fmt(tl!("Page {page} of {pages}"), &[("page", &(page + 1).to_string()), ("pages", &total.to_string())]);
         ui.label(egui::RichText::new(label).font(regular(13.0)));
-        if nav(ui, "chevronRight", tl!("Next Page"), page + 1 < total) {
+        if nav(ui, forward, tl!("Next Page"), page + 1 < total) {
             app.ui.print.preview = page + 1;
         }
     });
