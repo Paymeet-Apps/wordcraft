@@ -66,6 +66,12 @@ draw order (`bidi::visual`). The layout is not mirrored yet (later tasks of the 
 | Wildcards / Regular expressions / Match case / Whole words | أحرف البدل / التعابير النمطية / مطابقة حالة الأحرف / الكلمات الكاملة فقط |
 | pt (unit) / Inches / Centimeters | نقطة / بوصات / سنتيمترات |
 | Interface language / Interface size / Animation | لغة الواجهة / حجم الواجهة / الحركة |
+| Caption / Label (caption) / Source / Entry (index, TOC) | تسمية توضيحية / تسمية / مصدر / إدخال |
+| Series / Category (chart) / Accent (theme colour) | سلسلة / فئة / لون مميز |
+| Restrict Editing / Protection / Tracked change | تقييد التحرير / الحماية / تغيير متعقَّب |
+| AutoCorrect / AutoFormat As You Type | التصحيح التلقائي / التنسيق التلقائي أثناء الكتابة |
+| Shortcut / Ribbon tab / Group | اختصار / علامة تبويب الشريط / مجموعة |
+| Commit / PR (contributors page) | إيداع / طلب دمج |
 | Language names | Arabic adjective with the article: الإنجليزية (الولايات المتحدة)، الفرنسية (فرنسا)، العربية |
 
 ## Revision history
@@ -73,3 +79,4 @@ draw order (`bidi::visual`). The layout is not mirrored yet (later tasks of the 
 - 2026-10-14: first version with the `ar` catalog (L10N-AR.5).
 - 2026-10-14: wording fixes (Title, Citation, outlines, equation display) (L10N-AR.5).
 - 2026-10-15: dialogs part 1 (font, paragraph, layout, insert, lists, options, files) (L10N-AR.15a).
+- 2026-10-15: dialogs part 2, task panes, Backstage, credits (L10N-AR.15b).
