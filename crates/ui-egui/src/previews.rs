@@ -531,7 +531,7 @@ pub fn style_gallery(app: &mut WordApp, ui: &mut Ui, state: &Value) {
         let doc = &app.session.doc;
         let tex = app.previews.get_or(ui.ctx(), &key, || {
             // Sample letters in the interface's script (`АаБбВвГг` in Russian).
-            let mut p = Paragraph::with_text(tl!("AaBbCcDd"), CharProps::default()).styled(id);
+            let mut p = Paragraph::with_text(crate::i18n::t_logical("AaBbCcDd"), CharProps::default()).styled(id);
             p.props.space_before = Some(0.0);
             p.props.align = Some(wordcraft_doc::Align::Left);
             // Keep hanging indents (bullets) but start the first line at the tile's left edge.
@@ -609,12 +609,7 @@ pub fn style_set_gallery(app: &mut WordApp, ui: &mut Ui) {
         let tex = app.previews.get_or(ui.ctx(), &key, || {
             let mut s = wordcraft_engine::Session::new(Document::new());
             let _ = s.run("design.styleSet", &json!({"name": name}));
-            let blocks = vec![
-                Block::Para(Paragraph::with_text(crate::i18n::tc("preview", "Title"), CharProps::default()).styled("Title")),
-                Block::Para(Paragraph::with_text(tl!("Heading 1"), CharProps::default()).styled("Heading1")),
-                Block::Para(Paragraph::with_text(tl!("Body text in a short paragraph to show spacing."), CharProps::default())),
-            ];
-            snippet_blocks(&s.doc, blocks, 120.0, 110.0, ppp * 0.42, 6.0, None, false)
+            snippet_blocks(&s.doc, style_set_sample(), 120.0, 110.0, ppp * 0.42, 6.0, None, false)
         });
         if let Some(h) = tex {
             let sz = h.size_vec2() / ppp;
@@ -627,6 +622,16 @@ pub fn style_set_gallery(app: &mut WordApp, ui: &mut Ui) {
             let _ = app.run("design.styleSet", json!({"name": name}));
         }
     }
+}
+
+/// The sample a style-set tile lays out: a title, a heading and a line of body text, in the
+/// interface language, in reading order (a document does its own bidi; see `i18n::t_logical`).
+fn style_set_sample() -> Vec<Block> {
+    vec![
+        Block::Para(Paragraph::with_text(crate::i18n::tc_logical("preview", "Title"), CharProps::default()).styled("Title")),
+        Block::Para(Paragraph::with_text(crate::i18n::t_logical("Heading 1"), CharProps::default()).styled("Heading1")),
+        Block::Para(Paragraph::with_text(crate::i18n::t_logical("Body text in a short paragraph to show spacing."), CharProps::default())),
+    ]
 }
 
 /// Table Design: a tile previewing a table style.
@@ -686,6 +691,58 @@ mod tests {
             }
         }
         assert!(loaded.len() <= 2, "previewing loaded {loaded:?}");
+    }
+
+    /// L10N-AR.14: the style-set tiles are documents, which do their own bidi: the sample text
+    /// goes in in reading order (the catalog's logical text), not in the interface's draw order,
+    /// or it would be reordered twice («عنوان 1» drawn as "1 عنوان").
+    #[test]
+    fn style_set_samples_are_written_in_reading_order() {
+        let ar = crate::i18n::Lang::from_code("ar").unwrap();
+        crate::i18n::set_current(ar);
+        let texts: Vec<String> = style_set_sample().iter().filter_map(|b| if let Block::Para(p) = b { Some(p.plain_text()) } else { None }).collect();
+        // ar.tsv's only `preview` entry is one word («رئيسي»), which reads the same in both
+        // orders; the contextual path is shown on a multi-word value through its fallback to the
+        // plain entry (Title: «العنوان الرئيسي»).
+        let via_context = crate::i18n::tc_logical("no such context", "Title").to_string();
+        let drawn = crate::i18n::tc("no such context", "Title").to_string();
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(via_context, "العنوان الرئيسي");
+        assert_ne!(drawn, via_context, "the draw-order value differs, so the probe means something");
+        // As ar.tsv writes them (logical order).
+        assert_eq!(texts, ["رئيسي", "عنوان 1", "نص أساسي في فقرة قصيرة لإظهار التباعد."]);
+        assert_ne!(texts[1], crate::i18n::tr(ar, "Heading 1"), "the draw-order value differs, so the probe means something");
+        let en: Vec<String> = style_set_sample().iter().filter_map(|b| if let Block::Para(p) = b { Some(p.plain_text()) } else { None }).collect();
+        assert_eq!(en, ["Title", "Heading 1", "Body text in a short paragraph to show spacing."]);
+    }
+
+    /// L10N-AR.14: an author's style named in Arabic reads right to left in the Home tab's Styles
+    /// gallery, in an English interface too; built-in names are unchanged.
+    #[test]
+    fn user_style_names_read_in_order_in_the_style_gallery() {
+        use egui_kittest::kittest::Queryable;
+        let mut a = crate::WordApp::new(wordcraft_engine::Session::new(Document::new()), crate::Services::default());
+        a.session.doc.styles.upsert(wordcraft_doc::styles::Style {
+            id: "Memo2".into(),
+            name: "مذكرة 2".into(),
+            kind: wordcraft_doc::styles::StyleKind::Paragraph,
+            quick: true,
+            priority: Some(0),
+            ..Default::default()
+        });
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(
+            |ui, app: &mut crate::WordApp| {
+                let ctx = ui.ctx().clone();
+                app.logic(&ctx);
+                app.ui(ui);
+            },
+            a,
+        );
+        h.run_steps(4);
+        let drawn = crate::bidi::visual("مذكرة 2", true);
+        assert!(h.query_by_label(&drawn).is_some(), "the tile is labelled {drawn:?}");
+        assert!(h.query_by_label("مذكرة 2").is_none());
+        assert!(h.query_by_label("Normal").is_some());
     }
 
     /// #663: gallery previews are dimmed in the dark theme, unless they show Switch Modes' dark

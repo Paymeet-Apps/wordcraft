@@ -316,8 +316,12 @@ fn open_list(app: &mut WordApp, ui: &mut Ui) {
             t.accent,
         );
         let start = rtl::start_align2(Align::Center);
-        ui.painter().text(pos2(rtl::x(r, r.min.x + 40.0), r.min.y + 13.0), start, &name, medium(13.0), t.text);
-        ui.painter().text(pos2(rtl::x(r, r.min.x + 40.0), r.min.y + 29.0), start, &p, regular(11.0), t.text_dim);
+        // File names in the interface's direction, as file managers show them (Ruling R22: in
+        // English «تقرير مالي.docx» keeps ".docx" at the right); the folder path left to right,
+        // as paths are written. Either way an Arabic name reads right to left.
+        let (name, path) = (crate::bidi::visual(&name, rtl::is_rtl()), crate::bidi::visual(&p, false));
+        ui.painter().text(pos2(rtl::x(r, r.min.x + 40.0), r.min.y + 13.0), start, name, medium(13.0), t.text);
+        ui.painter().text(pos2(rtl::x(r, r.min.x + 40.0), r.min.y + 29.0), start, path, regular(11.0), t.text_dim);
         if resp.clicked() {
             let _ = app.run("file.open", json!({"path": p}));
             app.ui.backstage = false;
@@ -515,6 +519,36 @@ mod tests {
         assert_eq!(ids("re"), ["resume", "report"]);
         assert_eq!(ids("résumé"), ["resume"]);
         assert!(ids("no such template").is_empty());
+    }
+
+    /// Recent documents named in Arabic read right to left, in an English interface too
+    /// (L10N-AR.14). The name takes the interface's direction (Ruling R22): in English
+    /// ".docx" stays at the right, as on the path line under it.
+    #[test]
+    fn recent_file_names_with_arabic_are_reordered() {
+        let path = "C:/Reports/تقرير مالي.docx";
+        let mut a = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::new()), Services::default());
+        a.ui.recent = vec![path.to_string(), "C:/Reports/Budget (draft).docx".to_string()];
+        a.run("ui.backstage", json!({"value": true, "page": "home"})).unwrap();
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(
+            |ui, app: &mut WordApp| {
+                let ctx = ui.ctx().clone();
+                app.logic(&ctx);
+                app.ui(ui);
+            },
+            a,
+        );
+        h.run_steps(4);
+        let name = crate::bidi::visual("تقرير مالي.docx", false);
+        assert_ne!(name, "تقرير مالي.docx");
+        assert!(name.ends_with(".docx"), "{name:?}");
+        assert_eq!(crate::rtl::text_rects(h.output(), &name).len(), 1, "the name draws as {name:?}");
+        let shown_path = crate::bidi::visual(path, false);
+        assert_eq!(crate::rtl::text_rects(h.output(), &shown_path).len(), 1, "the path draws as {shown_path:?}");
+        assert!(crate::rtl::text_rects(h.output(), "تقرير مالي.docx").is_empty(), "not in logical order");
+        // Latin names are drawn as they are.
+        assert_eq!(crate::rtl::text_rects(h.output(), "Budget (draft).docx").len(), 1);
+        assert_eq!(crate::rtl::text_rects(h.output(), "C:/Reports/Budget (draft).docx").len(), 1);
     }
 
     /// Home and New are different pages (#141): Home has the short template row, the link to New

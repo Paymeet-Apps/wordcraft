@@ -100,8 +100,8 @@ pub fn templates(app: &mut WordApp, ui: &mut Ui, f: &mut TemplatesForm) -> bool 
 pub struct OrganizerForm {
     /// The other file (empty: none open).
     pub file: String,
-    /// Its styles: (name, type).
-    pub other: Vec<(String, String)>,
+    /// Its styles: (name, type, built in).
+    pub other: Vec<(String, String, bool)>,
     /// Selected style id in this document.
     pub left: String,
     /// Selected style name in the other file.
@@ -139,7 +139,7 @@ impl OrganizerForm {
             Ok(v) => {
                 let list = v.get("file").and_then(|f| f.get("styles")).and_then(Value::as_array).cloned().unwrap_or_default();
                 let s = |x: &Value, k: &str| x.get(k).and_then(Value::as_str).unwrap_or("").to_string();
-                self.other = list.iter().map(|x| (s(x, "name"), s(x, "type"))).collect();
+                self.other = list.iter().map(|x| (s(x, "name"), s(x, "type"), x.get("builtIn").and_then(Value::as_bool).unwrap_or(false))).collect();
                 self.file = path.to_string();
                 self.right.clear();
                 self.message.clear();
@@ -158,10 +158,12 @@ fn message(ui: &mut Ui, text: &str, color: egui::Color32) {
     }
 }
 
-/// A style in an Organizer list: its kind's glyph, then its name (the glyph at the start edge;
-/// a document's style name keeps its own direction under RTL).
-fn style_row(ty: &str, name: &str) -> String {
-    if rtl::is_rtl() { format!("{}  {}", crate::i18n::isolate(name), glyph(ty)) } else { format!("{}  {name}", glyph(ty)) }
+/// A style in an Organizer list: its kind's glyph, then its name (the glyph at the start edge).
+/// A built-in style is named in the interface language, an author's style as named, in its own
+/// direction (in draw order either way). The lists' values stay the documents' own names.
+fn style_row(ty: &str, name: &str, builtin: bool) -> String {
+    let shown = if builtin { crate::i18n::builtin_style_name(name) } else { crate::i18n::user_text(name).into_owned() };
+    if rtl::is_rtl() { format!("{shown}  {}", glyph(ty)) } else { format!("{}  {shown}", glyph(ty)) }
 }
 
 fn glyph(ty: &str) -> &'static str {
@@ -203,7 +205,13 @@ pub fn organizer(app: &mut WordApp, ui: &mut Ui, f: &mut OrganizerForm) -> bool 
             list_frame(ui, "organizer_mine", &mut |ui| {
                 for st in &mine {
                     let id = s(st, "id");
-                    if ui.selectable_label(f.left == id, style_row(&s(st, "type"), &s(st, "name"))).clicked() {
+                    if ui
+                        .selectable_label(
+                            f.left == id,
+                            style_row(&s(st, "type"), &s(st, "name"), st.get("builtIn").and_then(Value::as_bool).unwrap_or(false)),
+                        )
+                        .clicked()
+                    {
                         f.left = id;
                         f.rename = None;
                     }
@@ -221,10 +229,11 @@ pub fn organizer(app: &mut WordApp, ui: &mut Ui, f: &mut OrganizerForm) -> bool 
         });
         rtl::column(ui, |ui| {
             let name = std::path::Path::new(&f.file).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "—".into());
-            ui.label(egui::RichText::new(name).font(semibold(12.5))).on_hover_text(f.file.as_str());
+            ui.label(egui::RichText::new(crate::bidi::visual(&name, rtl::is_rtl())).font(semibold(12.5)))
+                .on_hover_text(crate::bidi::visual(&f.file, false).into_owned());
             list_frame(ui, "organizer_other", &mut |ui| {
-                for (n, ty) in &f.other {
-                    if ui.selectable_label(f.right == *n, style_row(ty, n)).clicked() {
+                for (n, ty, builtin) in &f.other {
+                    if ui.selectable_label(f.right == *n, style_row(ty, n, *builtin)).clicked() {
                         f.right = n.clone();
                     }
                 }
@@ -292,6 +301,44 @@ mod tests {
     use crate::Services;
     use wordcraft_engine::Session;
 
+    /// L10N-AR.14: the Organizer names built-in styles in the interface language (`Normal` is
+    /// «عادي» in Arabic) and an author's styles as named, in bidi order in any language.
+    #[test]
+    fn organizer_translates_built_in_style_names() {
+        use egui_kittest::kittest::Queryable;
+        for lang in ["ar", "en"] {
+            let mut a = WordApp::new(Session::new(wordcraft_doc::Document::new()), Services::default());
+            a.session.doc.styles.upsert(wordcraft_doc::styles::Style {
+                id: "Memo2".into(),
+                name: "مذكرة 2".into(),
+                kind: wordcraft_doc::styles::StyleKind::Paragraph,
+                ..Default::default()
+            });
+            a.run("ui.language", json!({"value": lang})).unwrap();
+            a.dialog = Some(Dialog::Organizer { form: Box::new(OrganizerForm::read(&mut a, None)) });
+            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(
+                |ui, app: &mut WordApp| {
+                    let ctx = ui.ctx().clone();
+                    app.logic(&ctx);
+                    app.ui(ui);
+                },
+                a,
+            );
+            h.run_steps(5);
+            let l = crate::i18n::Lang::from_code(lang).unwrap();
+            let user = crate::bidi::visual("مذكرة 2", true);
+            let (normal, memo) = if lang == "ar" {
+                (format!("{}  ¶", crate::i18n::tr(l, "Normal")), format!("{user}  ¶"))
+            } else {
+                ("¶  Normal".to_string(), format!("¶  {user}"))
+            };
+            let found = (h.query_by_label(&normal).is_some(), h.query_by_label(&memo).is_some());
+            crate::i18n::set_current(crate::i18n::Lang::EN);
+            assert!(found.0, "{lang}: the built-in style shows as {normal:?}");
+            assert!(found.1, "{lang}: the author's style shows as {memo:?}");
+        }
+    }
+
     /// The ribbon button opens Templates and Add-ins; OK attaches the typed template; the
     /// Organizer copies a style from it into the document and Close goes back.
     #[test]
@@ -319,7 +366,7 @@ mod tests {
         assert_eq!(a.session.doc.settings.attached_template.as_deref(), Some(p.as_str()));
 
         let mut org = OrganizerForm::read(&mut a, None);
-        assert!(org.other.iter().any(|(n, _)| n == "Memo"), "{:?}", org.other);
+        assert!(org.other.iter().any(|(n, _, builtin)| n == "Memo" && !builtin), "{:?}", org.other);
         org.right = "Memo".into();
         let r = a.run("styles.copyFrom", json!({"path": org.file, "styles": [org.right]}));
         assert!(r.is_ok(), "{r:?}");

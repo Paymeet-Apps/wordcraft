@@ -2105,7 +2105,8 @@ fn body(app: &mut WordApp, ui: &mut Ui, d: &mut Dialog) -> bool {
             ui.text_edit_singleline(name);
             let marks = app.session.doc.bookmarks();
             for (n, _) in &marks {
-                if ui.selectable_label(false, n).clicked() {
+                // A bookmark's name in its own direction, in any interface language.
+                if ui.selectable_label(false, crate::i18n::user_text(n)).clicked() {
                     let _ = app.run("edit.goto", json!({"bookmark": n}));
                 }
             }
@@ -3429,11 +3430,14 @@ fn goto_body(app: &mut WordApp, ui: &mut Ui, what: &mut GoToWhat, target: &mut S
             }
             GoToWhat::Bookmark => {
                 ui.label(tl!("Enter bookmark name:"));
-                egui::ComboBox::from_id_salt("goto_bookmark").width(220.0).selected_text(target.as_str()).show_ui(ui, |ui| {
-                    for b in &bookmarks {
-                        ui.selectable_value(target, b.clone(), b.as_str());
-                    }
-                });
+                egui::ComboBox::from_id_salt("goto_bookmark").width(220.0).selected_text(crate::i18n::user_text(target).into_owned()).show_ui(
+                    ui,
+                    |ui| {
+                        for b in &bookmarks {
+                            ui.selectable_value(target, b.clone(), crate::i18n::user_text(b));
+                        }
+                    },
+                );
                 if bookmarks.is_empty() {
                     ui.label(egui::RichText::new(tl!("This document has no bookmarks.")).weak());
                 }
@@ -4608,5 +4612,28 @@ mod tests {
         if let [ar, en] = player_widths[..] {
             assert!(ar <= en + 40.0, "the player is {ar} pt wide in arabic, {en} pt in english");
         }
+    }
+
+    /// L10N-AR.14: the Bookmark dialog lists an Arabic bookmark name right to left, in an English
+    /// interface too.
+    #[test]
+    fn bookmark_names_read_in_order_in_the_bookmark_dialog() {
+        use egui_kittest::kittest::Queryable;
+        let mut a = WordApp::new(Session::new(wordcraft_doc::Document::new()), crate::Services::default());
+        a.run("text.insert", json!({"text": "Body"})).unwrap();
+        a.run("insert.bookmark", json!({"name": "فصل2"})).unwrap();
+        a.dialog = Some(Dialog::Bookmark { name: String::new() });
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(
+            |ui, app: &mut WordApp| {
+                let ctx = ui.ctx().clone();
+                app.logic(&ctx);
+                app.ui(ui);
+            },
+            a,
+        );
+        h.run_steps(4);
+        let drawn = crate::bidi::visual("فصل2", true);
+        assert_ne!(drawn, "فصل2");
+        assert!(h.query_by_label(&drawn).is_some(), "the list shows {drawn:?}");
     }
 }
