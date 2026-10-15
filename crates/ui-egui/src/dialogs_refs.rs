@@ -311,7 +311,7 @@ fn caption_ui(app: &mut WordApp, ui: &mut Ui, f: &mut CaptionForm) -> Next {
     ui.label(tl!("Caption:"));
     rtl::row(ui, |ui| {
         // The number as the document will show it (left to right like the document).
-        ui.label(crate::i18n::isolate(&f.preview()));
+        ui.label(crate::i18n::user_text(&f.preview()).into_owned());
         ui.add(egui::TextEdit::singleline(&mut f.text).desired_width(220.0).hint_text(tl!("Caption text")));
     });
     ui.add_space(6.0);
@@ -468,7 +468,14 @@ fn index_ui(app: &mut WordApp, ui: &mut Ui, f: &mut IndexForm) -> Next {
             v.push((0, "A".to_string(), String::new()));
         }
         if f.kind == "runIn" {
-            v.push((0, format!("{}: {}, 4; {}", tl!("Atmosphere"), tl!("Ionosphere"), tl!("Mesosphere")), page("3")));
+            // Composed in reading order, then converted once (the sample is one line of text).
+            let line = format!(
+                "{}: {}, 4; {}",
+                crate::i18n::t_logical("Atmosphere"),
+                crate::i18n::t_logical("Ionosphere"),
+                crate::i18n::t_logical("Mesosphere")
+            );
+            v.push((0, crate::bidi::visual(&line, rtl::is_rtl()).into_owned(), page("3")));
         } else {
             v.push((0, tl!("Atmosphere").to_string(), page("1")));
             v.push((1, tl!("Ionosphere").to_string(), page("3")));
@@ -538,7 +545,8 @@ impl MarkForm {
             entry: app.session.selected_text().trim().to_string(),
             subentry: String::new(),
             option: "page".into(),
-            see: format!("{} ", tl!("See")),
+            // Sent as the entry's cross-reference: reading order, not draw order.
+            see: format!("{} ", crate::i18n::t_logical("See")),
             bookmark: bookmarks.first().cloned().unwrap_or_default(),
             bookmarks,
             bold: false,

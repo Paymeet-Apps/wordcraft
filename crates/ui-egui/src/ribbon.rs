@@ -42,7 +42,7 @@ fn reading_toolbar(app: &mut WordApp, ui: &mut Ui, t: Tokens) {
                     Some(v) if v <= 350.0 => "Wide",
                     _ => "Page",
                 };
-                crate::rtl::sub_menu(ui, format!("{}: {}", tl!("Column width"), tl!(active)), |ui| {
+                crate::rtl::sub_menu(ui, crate::i18n::labeled(tl!("Column width"), tl!(active)), |ui| {
                     for (name, value) in [("Auto", "auto"), ("Narrow", "narrow"), ("Medium", "medium"), ("Wide", "wide"), ("Page", "page")] {
                         if ui.selectable_label(active == name, tl!(name)).clicked() {
                             let _ = app.run("view.readColumnWidth", json!({"value": value}));
@@ -52,7 +52,7 @@ fn reading_toolbar(app: &mut WordApp, ui: &mut Ui, t: Tokens) {
                 });
                 ui.separator();
                 let pct = (app.session.view.read_zoom * 100.0).round() as u32;
-                crate::rtl::sub_menu(ui, format!("{}: {pct}%", tl!("Text size")), |ui| {
+                crate::rtl::sub_menu(ui, crate::i18n::labeled(tl!("Text size"), &format!("{pct}%")), |ui| {
                     for percent in [75, 90, 100, 110, 125, 150] {
                         if ui.selectable_label(pct == percent, format!("{percent}%")).clicked() {
                             let _ = app.run("view.readTextSize", json!({"value": percent}));
@@ -63,7 +63,7 @@ fn reading_toolbar(app: &mut WordApp, ui: &mut Ui, t: Tokens) {
                 ui.separator();
                 let spacing = app.session.view.read_line_spacing;
                 let label = spacing.map_or_else(|| tl!("Document").to_owned(), |v| format!("{v}×"));
-                crate::rtl::sub_menu(ui, format!("{}: {}", tl!("Line spacing"), label), |ui| {
+                crate::rtl::sub_menu(ui, crate::i18n::labeled(tl!("Line spacing"), &label), |ui| {
                     if ui.selectable_label(spacing.is_none(), tl!("Document")).clicked() {
                         let _ = app.run("view.readLineSpacing", json!({"value": "document"}));
                         ui.close();
@@ -472,7 +472,9 @@ fn scroll_strip(ui: &mut Ui, salt: &str, max_w: f32, add: impl FnOnce(&mut Ui)) 
     // width (up to `max_w`), or `max_w` before they have been measured. A box sized from what the
     // scroll area showed last frame (`rtl::fitted`) locks in a first, too narrow measurement: the
     // Table Styles strip showed one tile (Task 16 screenshots).
-    let box_w = if natural > 0.0 { natural.min(max_w) } else { max_w };
+    // Never wider than the row has room for (the right-to-left row would otherwise run the box
+    // past the window's left edge on a narrow window).
+    let box_w = (if natural > 0.0 { natural.min(max_w) } else { max_w }).min(ui.available_width().max(60.0));
     let out = ui
         .allocate_ui_with_layout(vec2(box_w, ui.available_height()), egui::Layout::top_down(egui::Align::Min), |ui| {
             ui.set_min_width(box_w);
@@ -1179,7 +1181,7 @@ fn design(app: &mut WordApp, ui: &mut Ui) {
             });
             menu_button(ui, app, "fonts", Some("Fonts"), "Theme Fonts", false, "design.themeFonts", |ui, app| {
                 for (name, h, b, _) in wordcraft_engine::cmd::design::THEMES {
-                    mi_text(ui, app, &format!("{}: {h} / {b}", tl!(name)), "design.themeFonts", json!({"heading": h, "body": b}));
+                    mi_text(ui, app, &crate::i18n::labeled(tl!(name), &format!("{h} / {b}")), "design.themeFonts", json!({"heading": h, "body": b}));
                 }
             });
         });
@@ -3011,6 +3013,45 @@ mod tests {
         }
     }
 
+    /// Design › Theme Fonts lists "Name: heading / body". In Arabic the theme's name reads first
+    /// (drawn at the right, the colon at its left), not `format!` order with the colon after the
+    /// fonts' end.
+    #[test]
+    fn theme_font_items_read_label_first_in_arabic() {
+        let Some((name, h_font, b_font, _)) = wordcraft_engine::cmd::design::THEMES.first() else { return };
+        for code in ["ar", "en"] {
+            let mut h = tab_harness(code, "Design");
+            crate::widgets::MENU_OPENERS.with(|m| m.borrow_mut().clear());
+            h.run_steps(1);
+            let tip = label(code, "Theme Fonts");
+            let opener = crate::widgets::MENU_OPENERS.with(|m| m.take()).into_iter().find(|(n, _)| *n == tip).map(|(_, r)| r);
+            let r = opener.unwrap_or_else(|| panic!("{code}: no Theme Fonts menu"));
+            h.input_mut().events.push(egui::Event::PointerMoved(r.center()));
+            for pressed in [true, false] {
+                h.input_mut().events.push(egui::Event::PointerButton {
+                    pos: r.center(),
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Default::default(),
+                });
+            }
+            h.run_steps(3);
+            let expected = if code == "ar" {
+                let logical = crate::i18n::t_logical(name);
+                assert_ne!(logical, *name, "the theme name is translated");
+                crate::bidi::visual(&format!("{logical}: {h_font} / {b_font}"), true).into_owned()
+            } else {
+                format!("{name}: {h_font} / {b_font}")
+            };
+            assert!(h.query_by_label_contains(&expected).is_some(), "{code}: the menu shows {expected:?}");
+            if code == "ar" {
+                let old = format!("{}: {h_font} / {b_font}", label(code, name));
+                assert!(h.query_by_label_contains(&old).is_none(), "not in format! order: {old:?}");
+            }
+        }
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+    }
+
     /// The mini toolbar's menus: drawn over a selection, below the ribbon.
     const MINI_TOOLBAR: &str = "(mini toolbar)";
 
@@ -3066,7 +3107,11 @@ mod tests {
                     // The crop sides and the Border menu were outside the reference key set.
                     for side in ["L", "T", "R", "B"] {
                         assert!(h.query_by_label(side).is_none(), "the crop side {side} is translated");
+                        let shown = label("ar", side);
+                        assert_ne!(shown, side, "{side} has an Arabic entry");
+                        assert!(h.query_by_label(&shown).is_some(), "the crop side {side} reads {shown:?}");
                     }
+                    assert!(h.query_by_label(&label("ar", "L")).is_some_and(|_| label("ar", "L") == "يسار"), "L is «يسار»");
                     assert!(h.query_by_label("Border").is_none(), "Border is translated");
                 }
             }

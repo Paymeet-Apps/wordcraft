@@ -379,7 +379,7 @@ fn body(ui: &mut Ui, b: &mut FileBrowser, t: &Tokens) -> Option<Option<PathBuf>>
                     ui.painter().with_clip_rect(r).text(
                         pos2(rtl::x(r, r.min.x + 30.0), r.center().y),
                         rtl::start_align2(egui::Align::Center),
-                        crate::i18n::isolate(&e.name),
+                        crate::i18n::file_name(&e.name),
                         regular(13.0),
                         t.text,
                     );

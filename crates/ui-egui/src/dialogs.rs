@@ -2208,7 +2208,7 @@ fn body(app: &mut WordApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                     rtl::grid_row(
                         ui,
                         [&mut |ui: &mut Ui| label(ui, "Base text:"), &mut |ui: &mut Ui| {
-                            ui.label(egui::RichText::new(crate::i18n::isolate(base)).strong());
+                            ui.label(egui::RichText::new(crate::i18n::user_text(base)).strong());
                         }],
                     );
                     rtl::grid_row(
@@ -2873,7 +2873,7 @@ fn body(app: &mut WordApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                                 ui,
                                 [&mut |ui: &mut Ui| label(ui, part), &mut |ui: &mut Ui| {
                                     match address.get(key).and_then(Value::as_str) {
-                                        Some(f) => ui.label(egui::RichText::new(crate::i18n::isolate(f)).strong()),
+                                        Some(f) => ui.label(egui::RichText::new(crate::i18n::user_text(f)).strong()),
                                         None => ui.label(egui::RichText::new(tl!("(not matched)")).weak()),
                                     };
                                 }],
@@ -2893,7 +2893,8 @@ fn body(app: &mut WordApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                 egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
                     for f in unknown.iter() {
                         // The bullet leads: at the right under RTL.
-                        let line = if rtl::is_rtl() { format!("{} •", crate::i18n::isolate(f)) } else { format!("• {f}") };
+                        let f = crate::i18n::user_text(f);
+                        let line = if rtl::is_rtl() { format!("{f} •") } else { format!("• {f}") };
                         ui.label(egui::RichText::new(line).color(Tokens::get(ui.ctx()).red));
                     }
                 });
@@ -3204,11 +3205,9 @@ fn manage_styles(app: &mut WordApp, ui: &mut Ui, alphabetical: &mut bool, select
                 };
                 let hidden = st.get("hidden").and_then(Value::as_bool).unwrap_or(false);
                 // The type glyph leads the name: at its right under RTL.
-                let line = if rtl::is_rtl() {
-                    format!("{}  {glyph}", crate::i18n::isolate(&str_of(st, "name")))
-                } else {
-                    format!("{glyph}  {}", str_of(st, "name"))
-                };
+                let style = str_of(st, "name");
+                let style = crate::i18n::user_text(&style);
+                let line = if rtl::is_rtl() { format!("{style}  {glyph}") } else { format!("{glyph}  {style}") };
                 let mut name = egui::RichText::new(line);
                 if hidden {
                     name = name.weak();

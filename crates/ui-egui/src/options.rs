@@ -97,6 +97,15 @@ fn pane_label(id: &str) -> &'static str {
     }
 }
 
+/// The Options page's pane list width, and the gaps around the rule between it and the settings.
+const PANE_LIST_W: f32 = 170.0;
+const GAP_BEFORE_RULE: f32 = 12.0;
+const RULE_W: f32 = 1.0;
+const GAP_AFTER_RULE: f32 = 20.0;
+/// The settings column's widest (English: always this) and narrowest width.
+const CONTENT_MAX_W: f32 = 640.0;
+const CONTENT_MIN_W: f32 = 120.0;
+
 /// The Options page.
 pub fn page(app: &mut WordApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
@@ -107,14 +116,18 @@ pub fn page(app: &mut WordApp, ui: &mut Ui) {
     // the pane list is at the right under RTL.
     // RTL: the settings column is capped to the room left of the pane list (the right-to-left row
     // offers it more than is on screen, so long notes ran past the window's left edge at 1024 pt).
-    let content_w = if rtl::is_rtl() { (ui.available_width() - 170.0 - 12.0 - 1.0 - 20.0).clamp(120.0, 640.0) } else { 640.0 };
+    let content_w = if rtl::is_rtl() {
+        (ui.available_width() - PANE_LIST_W - GAP_BEFORE_RULE - RULE_W - GAP_AFTER_RULE).clamp(CONTENT_MIN_W, CONTENT_MAX_W)
+    } else {
+        CONTENT_MAX_W
+    };
     ui.horizontal_top(|ui| {
         rtl::column(ui, |ui| {
-            ui.set_width(170.0);
+            ui.set_width(PANE_LIST_W);
             for id in PANES {
                 let label = tl!(pane_label(id));
                 let active = current == id;
-                let (r, resp) = ui.allocate_exact_size(vec2(170.0, 30.0), egui::Sense::click());
+                let (r, resp) = ui.allocate_exact_size(vec2(PANE_LIST_W, 30.0), egui::Sense::click());
                 resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, active, label));
                 if active {
                     ui.painter().rect_filled(r, 4.0, t.checked);
@@ -128,10 +141,10 @@ pub fn page(app: &mut WordApp, ui: &mut Ui) {
                 }
             }
         });
-        ui.add_space(12.0);
-        let (line, _) = ui.allocate_exact_size(vec2(1.0, 420.0), egui::Sense::hover());
+        ui.add_space(GAP_BEFORE_RULE);
+        let (line, _) = ui.allocate_exact_size(vec2(RULE_W, 420.0), egui::Sense::hover());
         ui.painter().rect_filled(line, 0.0, t.border);
-        ui.add_space(20.0);
+        ui.add_space(GAP_AFTER_RULE);
         rtl::column(ui, |ui| {
             ui.set_max_width(content_w);
             match current.as_str() {

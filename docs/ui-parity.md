@@ -1,6 +1,6 @@
 # UI parity with Microsoft Word
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-15 · **Change:** trivial (Arabic screenshot pass: RTL row re-measured, 85% → 90%; previously minor: mirrored interface for Arabic; previously trivial: no document behind the Start screen, #1129; previously trivial: equation pictures share a few textures, #1002; previously trivial: selection bar in the left margin, #856; previously trivial: table column and row markers on the rulers, #700; previously trivial: table borders and the resize handle drag on the page, #217; previously major: first version; ribbon, dialogs, shortcuts and on-canvas interaction measured from `crates/ui-egui` and the command registry) · **Target:** Microsoft Word (Microsoft 365) for Mac 16.113.4
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-15 · **Change:** trivial (why the RTL row's % and hours both rose: text-field bidi was under-counted; previously trivial: Arabic screenshot pass: RTL row re-measured, 85% → 90%; previously minor: mirrored interface for Arabic; previously trivial: no document behind the Start screen, #1129; previously trivial: equation pictures share a few textures, #1002; previously trivial: selection bar in the left margin, #856; previously trivial: table column and row markers on the rulers, #700; previously trivial: table borders and the resize handle drag on the page, #217; previously major: first version; ribbon, dialogs, shortcuts and on-canvas interaction measured from `crates/ui-egui` and the command registry) · **Target:** Microsoft Word (Microsoft 365) for Mac 16.113.4
 
 How WordCraft looks and feels next to Word: ribbon, dialogs, panes, keyboard, mouse and touch.
 Typing behaviour has its own checklist ([`typing-parity.md`](typing-parity.md)). All assets are our
@@ -40,7 +40,7 @@ own (`AGENTS.md`: no Microsoft iconography, ever).
 | File dialogs (Open, Save As, Export, Insert Picture) | system dialog, without blocking the window (#94); Linux/BSD without a file chooser portal or zenity: WordCraft's own browser, also File › Open › Browse in WordCraft… (#576) | system dialog | 95% | — |
 | Platform conventions (macOS menus/traffic lights #255, Windows title bar, Linux CSD on Wayland #78) | partial | native | 70% | 3–5 |
 | Screen readers (VoiceOver, Narrator, Orca) | AccessKit on; the document canvas describes paragraphs, headings (level), list items, tables, links, pictures (alt text) and the caret and selection, for the pages on screen (#488); not yet tried with real screen readers | full | 50% | 5–8 |
-| Right-to-left (mirrored) interface | ✅ Arabic (any interface language with `rtl: true` mirrors; Hebrew needs a catalog); see [Mirrored interface (Arabic)](#mirrored-interface-arabic) | ✅ (Arabic, Hebrew Word) | 90% (side-by-side screenshot pass done at 1440×900 and 1024×700; native review pending) | 6–10 (`TextEdit` caret and selection 4–6, egui scroll bars and combo boxes 1–2, mirror leftovers 1–2; [gaps.md](gaps.md#arabic-interface-follow-ups)) |
+| Right-to-left (mirrored) interface | ✅ Arabic (any interface language with `rtl: true` mirrors; Hebrew needs a catalog); see [Mirrored interface (Arabic)](#mirrored-interface-arabic) | ✅ (Arabic, Hebrew Word) | 90% (side-by-side screenshot pass done at 1440×900 and 1024×700; native review pending) | 6–10, up from 4–6 because text-field bidi was under-counted (`TextEdit` caret and selection 4–6, egui scroll bars and combo boxes 1–2, mirror leftovers 1–2; [gaps.md](gaps.md#arabic-interface-follow-ups)) |
 
 ## Mirrored interface (Arabic)
 
@@ -90,6 +90,7 @@ conventions: [`localization-ar.md`](localization-ar.md).
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-15 | trivial | Why the RTL row's % and hours both rose in the screenshot pass: the screenshots confirmed the mirroring (85% → 90%), and showed that bidi caret and selection in `TextEdit` fields had been under-counted in the first 4–6 h estimate, so the remaining work grew to 6–10 h (L10N-AR.16 final review) |
 | 2026-10-15 | trivial | Arabic screenshot pass (every ribbon tab incl. contextual ones, Backstage, Options panes, Paragraph, Font, Page Setup, AutoCorrect, panes, menus): Table Styles strip, Info fields at 1024 pt, Options notes, size-box units, file patterns and code spans fixed; RTL row 85% → 90%, 6–10 h (L10N-AR.16) |
 | 2026-10-15 | minor | Mirrored (right-to-left) interface for Arabic: title bar, status bar, ribbon, menus, panes, dialogs, Backstage, icons, tooltips; exceptions and gaps listed (L10N-AR.16) |
 | 2026-10-13 | trivial | The caret is black or white by contrast with the paper, page colour, dark page, shading or highlight under it (#299) |

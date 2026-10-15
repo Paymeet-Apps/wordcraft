@@ -587,7 +587,7 @@ impl WordApp {
 fn caption_title(name: &str, file_name: bool, status: &str) -> String {
     let rtl = rtl::is_rtl();
     if !rtl {
-        let name = if file_name { crate::bidi::visual(name, false) } else { crate::i18n::user_text(name) };
+        let name = if file_name { crate::i18n::file_name(name) } else { crate::i18n::user_text(name) };
         return format!("{name} — {status}");
     }
     let status = crate::i18n::logical(status).unwrap_or(status);

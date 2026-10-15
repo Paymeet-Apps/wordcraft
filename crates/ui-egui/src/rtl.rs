@@ -6,7 +6,7 @@
 #![cfg_attr(not(test), allow(dead_code))]
 
 use egui::{
-    Align, Align2, Button, InnerResponse, IntoAtoms, Key, Layout, Popup, Rect, RectAlign, Response, RichText, Ui, Vec2, Widget as _, WidgetText, vec2,
+    Align, Align2, Button, InnerResponse, IntoAtoms, Layout, Popup, Rect, RectAlign, Response, RichText, Ui, Vec2, Widget as _, WidgetText, vec2,
 };
 
 /// Is the interface drawn right to left?
@@ -174,17 +174,6 @@ pub fn menu_layout() -> Layout {
     Layout::top_down_justified(if is_rtl() { Align::Max } else { Align::Min })
 }
 
-/// Swap left/right arrows under RTL, for code that reads them as previous/next.
-pub fn arrow(key: Key) -> Key {
-    if !is_rtl() {
-        return key;
-    }
-    match key {
-        Key::ArrowLeft => Key::ArrowRight,
-        Key::ArrowRight => Key::ArrowLeft,
-        other => other,
-    }
-}
 // ---- Menus, tooltips and check boxes (L10N-AR.9) ----
 //
 // Every helper below is the stock egui call in English (same code path, so the same pixels). Under
@@ -674,17 +663,6 @@ mod tests {
         assert!(l > f, "arabic: L ({l}) is right of F ({f})");
         let (l, f) = grid_cells("en");
         assert!(l < f, "english: L ({l}) is left of F ({f})");
-    }
-
-    #[test]
-    fn arrows_swap_only_in_rtl() {
-        assert_eq!(arrow(Key::ArrowLeft), Key::ArrowLeft);
-        assert_eq!(arrow(Key::ArrowRight), Key::ArrowRight);
-        with_lang("ar", || {
-            assert_eq!(arrow(Key::ArrowLeft), Key::ArrowRight);
-            assert_eq!(arrow(Key::ArrowRight), Key::ArrowLeft);
-            assert_eq!(arrow(Key::ArrowUp), Key::ArrowUp);
-        });
     }
 
     #[test]

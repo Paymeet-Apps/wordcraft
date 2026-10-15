@@ -236,7 +236,7 @@ pub fn show_alert(app: &mut WordApp, ctx: &egui::Context) {
             ui.set_max_width(460.0);
             let mut body = |ui: &mut egui::Ui| {
                 // Zotero's own words, in their own direction.
-                ui.label(crate::i18n::isolate(a.text.trim_end()));
+                ui.label(crate::i18n::user_text(a.text.trim_end()).into_owned());
                 ui.add_space(8.0);
                 // The first answer (OK, Yes) at the start edge: the right under RTL.
                 crate::rtl::row(ui, |ui| {

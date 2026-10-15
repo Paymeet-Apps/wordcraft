@@ -319,7 +319,7 @@ fn open_list(app: &mut WordApp, ui: &mut Ui) {
         // File names in the interface's direction, as file managers show them (Ruling R22: in
         // English «تقرير مالي.docx» keeps ".docx" at the right); the folder path left to right,
         // as paths are written. Either way an Arabic name reads right to left.
-        let (name, path) = (crate::bidi::visual(&name, rtl::is_rtl()), crate::bidi::visual(&p, false));
+        let (name, path) = (crate::i18n::file_name(&name), crate::bidi::visual(&p, false));
         ui.painter().text(pos2(rtl::x(r, r.min.x + 40.0), r.min.y + 13.0), start, name, medium(13.0), t.text);
         ui.painter().text(pos2(rtl::x(r, r.min.x + 40.0), r.min.y + 29.0), start, path, regular(11.0), t.text_dim);
         if resp.clicked() {
@@ -472,7 +472,7 @@ fn properties_column(app: &mut WordApp, ui: &mut Ui, info: &serde_json::Value) {
 /// "Pages: 2": a translated caption and its number, through the catalog's `{label}: {value}`, so
 /// under RTL the caption reads first (drawn right of the number).
 fn stat_line(label: &str, value: &str) -> String {
-    crate::i18n::fmt_translated(tl!("{label}: {value}"), &[("label", label), ("value", value)])
+    crate::i18n::labeled(label, value)
 }
 
 /// File › Info's statistics column.

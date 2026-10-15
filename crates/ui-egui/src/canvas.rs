@@ -1453,7 +1453,8 @@ fn balloons(app: &mut WordApp, ui: &mut Ui, painter: &egui::Painter, rects: &[Re
     for (pos, author, props) in formats.into_iter().take(500) {
         let Some(c) = layout.caret_on(&pos, app.session.page_hint) else { continue };
         let what = crate::panes::describe_props(&props).join(", ");
-        let text = if what.is_empty() { tl!("Formatted").to_string() } else { format!("{}: {what}", tl!("Formatted")) };
+        // The descriptions are catalog text (draw order already).
+        let text = if what.is_empty() { tl!("Formatted").to_string() } else { crate::i18n::labeled(tl!("Formatted"), &what) };
         by_page.entry(c.page).or_default().push((c.x, c.top + c.height, Balloon::Format(author, text), pos));
     }
     // Each end of a tracked move.
@@ -1467,7 +1468,8 @@ fn balloons(app: &mut WordApp, ui: &mut Ui, painter: &egui::Painter, rects: &[Re
     let deletions = if app.session.revisions_in_balloons() { wordcraft_engine::cmd::review::deletion_balloons(&app.session) } else { Vec::new() };
     for d in deletions {
         let Some(c) = layout.caret_on(&d.at, app.session.page_hint) else { continue };
-        let text = format!("{}: {}", tl!("Deleted"), d.text);
+        // The deleted text is the document's, in its own direction.
+        let text = crate::i18n::labeled(tl!("Deleted"), &crate::i18n::user_text(&d.text));
         by_page.entry(c.page).or_default().push((c.x, c.top + c.height, Balloon::Format(d.author, text), d.at));
     }
     let palette = [t.blue, Color32::from_rgb(0xB0, 0x3A, 0x2E), Color32::from_rgb(0x2E, 0x7D, 0x32), Color32::from_rgb(0x8E, 0x44, 0xAD), t.orange];
@@ -1609,8 +1611,10 @@ enum Balloon {
     Format(String, String),
 }
 
+/// A balloon's author line: the document's author name in its own direction (draw order), or
+/// "Author" when there is none.
 fn author_name(a: &str) -> String {
-    if a.is_empty() { tl!("Author").to_string() } else { a.to_string() }
+    if a.is_empty() { tl!("Author").to_string() } else { crate::i18n::user_text(a).into_owned() }
 }
 
 /// A balloon card's background, border and author-colour stripe; `slot` paints them under
@@ -2733,6 +2737,47 @@ fn is_followable_link(url: &str) -> bool {
 mod tests {
     use super::*;
     use crate::table_resize::tests::{H, cell, screen, steps, table_window};
+
+    /// Show Revisions in Balloons in Arabic: the deletion card reads "label: text" from the right
+    /// (the catalog's `{label}: {value}`, not `format!` order), the deleted Arabic text and the
+    /// author's Arabic name in their own direction; in English the card is unchanged.
+    #[test]
+    fn deletion_balloons_read_label_first_in_arabic() {
+        for code in ["ar", "en"] {
+            let mut a = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::new()), Default::default());
+            a.session.author = "سارة علي".into();
+            a.run("document.setText", serde_json::json!({"text": "keep نص قديم stay"})).unwrap();
+            a.run("review.trackChanges", serde_json::json!({"value": true})).unwrap();
+            a.run("select.text", serde_json::json!({"text": "نص قديم"})).unwrap();
+            a.run("text.delete", serde_json::json!({})).unwrap();
+            a.run("review.trackingOptions", serde_json::json!({"balloons": "revisions"})).unwrap();
+            a.run("ui.language", serde_json::json!({"value": code})).unwrap();
+            let mut h = egui_kittest::Harness::builder().with_size(vec2(1440.0, 900.0)).build_ui_state(
+                |ui, app: &mut WordApp| {
+                    let ctx = ui.ctx().clone();
+                    app.logic(&ctx);
+                    app.ui(ui);
+                },
+                a,
+            );
+            h.run_steps(5);
+            let texts: Vec<String> = h
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|s| if let egui::Shape::Text(t) = &s.shape { Some(t.galley.text().to_string()) } else { None })
+                .collect();
+            let (deleted, author) = if code == "ar" {
+                let label = crate::i18n::t_logical("Deleted");
+                (crate::bidi::visual(&format!("{label}: نص قديم"), true).into_owned(), crate::bidi::visual("سارة علي", true).into_owned())
+            } else {
+                (format!("Deleted: {}", crate::bidi::visual("نص قديم", true)), crate::bidi::visual("سارة علي", true).into_owned())
+            };
+            assert!(texts.contains(&deleted), "{code}: the card reads {deleted:?}: {texts:?}");
+            assert!(texts.contains(&author), "{code}: the author reads {author:?}: {texts:?}");
+        }
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+    }
 
     #[test]
     fn reading_animation_eases_then_lands_exactly_on_column_start() {

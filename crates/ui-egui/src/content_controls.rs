@@ -175,7 +175,7 @@ pub fn popup(app: &mut WordApp, ctx: &egui::Context) {
                         // The document's own entries, each in its own direction. They stay at the
                         // left: right-aligned rows would stretch the popup to the screen's edge.
                         for (i, item) in items.iter().enumerate() {
-                            if ui.selectable_label(false, crate::i18n::isolate(&item.display)).clicked() {
+                            if ui.selectable_label(false, crate::i18n::user_text(&item.display).into_owned()).clicked() {
                                 let _ = app.run("developer.chooseItem", json!({"at": at_json, "index": i}));
                                 close = true;
                             }

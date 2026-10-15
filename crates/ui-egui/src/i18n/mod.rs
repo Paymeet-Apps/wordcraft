@@ -530,6 +530,15 @@ pub fn user_text(s: &str) -> std::borrow::Cow<'_, str> {
     crate::bidi::own(s)
 }
 
+/// A file name drawn on its own (a recent file, a template, a folder entry, the title bar): in
+/// draw order with the *interface's* direction as its base, as file managers show file names
+/// (Ruling R22): in English «تقرير مالي.docx» keeps ".docx" at the right, under RTL at the left.
+/// Either way an Arabic name reads right to left. Folder paths stay left to right
+/// (`bidi::visual(path, false)`), as paths are written.
+pub fn file_name(name: &str) -> std::borrow::Cow<'_, str> {
+    crate::bidi::visual(name, current().is_rtl())
+}
+
 /// A style's name as the interface shows it: built-in styles (`Normal`, `Heading 2`, `TOC 3`) in
 /// the current language, styles the author made as named, in draw order ([`user_text`]). Display
 /// only: the document, commands and saved files keep the English name. Both kinds come back in
@@ -627,8 +636,22 @@ pub fn suffixed(label: &str, suffix: &str) -> String {
     crate::bidi::visual(&format!("{logical}{suffix}"), true).into_owned()
 }
 
-/// A user or document value as it must be inserted into a translated sentence: converted to draw
-/// order in its own direction when the interface is right to left, else unchanged.
+/// "Label: value" through the catalog's `{label}: {value}`, so under RTL the label reads first
+/// (drawn at the right of the value) instead of `format!("{label}: {value}")` reading backwards.
+/// Both parts must already be in draw order: `label` from `tl!`/[`t`], `value` catalog text, a
+/// number, or user text through [`user_text`] (or [`isolate`]). English: `label: value`.
+pub fn labeled(label: &str, value: &str) -> String {
+    fmt_translated(t("{label}: {value}"), &[("label", label), ("value", value)])
+}
+
+/// A user or document value as it must be inserted into a translated, draw-order template with
+/// [`fmt_translated`] (or composed with catalog text in code under RTL): converted to draw order
+/// in its own direction when the interface is right to left, else unchanged, since an English
+/// template is drawn as it stands.
+///
+/// Only for that. A user or document value drawn **on its own** (a label, a list item, a
+/// tooltip) goes through [`user_text`] instead, which also reorders it in the English interface;
+/// a file name goes through [`file_name`].
 pub fn isolate(value: &str) -> String {
     if current().is_rtl() { crate::bidi::visual(value, crate::bidi::first_strong_is_rtl(value)).into_owned() } else { value.to_string() }
 }
