@@ -993,9 +993,8 @@ fn source_ui(app: &mut WordApp, ui: &mut Ui, f: &mut SourceForm) -> Next {
             });
             let edit = f.edit;
             for (key, label) in f.fields() {
-                // "Author:". An Arabic label is in draw order: its colon, which ends it, goes first.
-                let name = tl!(label);
-                let caption = if rtl::is_rtl() && crate::bidi::first_strong_is_rtl(name) { format!(":{name}") } else { format!("{name}:") };
+                // "Author:": the colon ends the label in reading order (its left under RTL).
+                let caption = crate::i18n::suffixed(tl!(label), ":");
                 rtl::grid_row(
                     ui,
                     [

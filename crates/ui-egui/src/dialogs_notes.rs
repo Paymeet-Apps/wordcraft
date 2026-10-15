@@ -123,9 +123,8 @@ pub fn note_options(app: &mut WordApp, ui: &mut Ui, f: &mut NoteForm) -> bool {
                         ui.label("");
                     },
                     &mut |ui: &mut Ui| {
-                        // The ellipsis ends "Convert…": under RTL that is its left (draw order).
-                        let name = tl!("Convert");
-                        let label = if rtl::is_rtl() && crate::bidi::first_strong_is_rtl(name) { format!("…{name}") } else { format!("{name}…") };
+                        // The ellipsis ends "Convert…" in reading order (its left under RTL).
+                        let label = crate::i18n::suffixed(tl!("Convert"), "…");
                         rtl::sub_menu(ui, label, |ui| {
                             for (to, l) in
                                 [("endnote", "Footnotes to endnotes"), ("footnote", "Endnotes to footnotes"), ("swap", "Swap footnotes and endnotes")]

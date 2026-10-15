@@ -557,11 +557,15 @@ pub fn radio_value<'a, V: PartialEq>(ui: &mut Ui, current: &mut V, alternative: 
 /// [`grid_row`] and [`row`] centre their cells on one control height, so a taller cell would
 /// stick out above its row; this one is top-aligned and as tall as its tallest block.
 pub fn row_top<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
-    if !is_rtl() || ui.is_sizing_pass() {
+    if !is_rtl() {
         return ui.horizontal_top(add);
     }
     let size = vec2(ui.available_size_before_wrap().x.max(0.0), 0.0);
-    ui.allocate_ui_with_layout(size, Layout::right_to_left(Align::Min), add)
+    // A sizing pass lays it out left to right like `row` and `grid_row`, top-aligned: inside a
+    // right-aligned parent `horizontal_top` would already run right to left.
+    let layout =
+        if ui.is_sizing_pass() { Layout::left_to_right(Align::Center).with_cross_align(Align::Min) } else { Layout::right_to_left(Align::Min) };
+    ui.allocate_ui_with_layout(size, layout, add)
 }
 
 /// [`fitted`] content (a `Grid`) at the start edge of a Ui that lays out from the left, such as a

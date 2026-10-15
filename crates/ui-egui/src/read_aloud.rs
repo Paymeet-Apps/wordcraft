@@ -129,9 +129,8 @@ fn player(app: &mut WordApp, ui: &mut Ui, t: &Tokens, run: &mut Option<(&'static
         ui.add_space(4.0);
         let n = (index + 1).min(count);
         let what = match state {
-            // Draw order under RTL: the count at the left, the (right-to-left) word at the right.
-            State::Playing if rtl && crate::bidi::first_strong_is_rtl(tl!("Sentence")) => format!("{count} / {n} {}", tl!("Sentence")),
-            State::Playing => format!("{} {n} / {count}", tl!("Sentence")),
+            // "Sentence 3 / 9", read from the right under RTL.
+            State::Playing => crate::i18n::suffixed(tl!("Sentence"), &format!(" {n} / {count}")),
             State::Paused => tl!("Paused").to_string(),
             State::Stopped if count > 0 && index >= count => tl!("Finished").to_string(),
             State::Stopped => tl!("Stopped").to_string(),

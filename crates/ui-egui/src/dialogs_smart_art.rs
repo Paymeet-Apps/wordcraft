@@ -305,7 +305,7 @@ pub fn text_pane(app: &mut WordApp, ui: &mut Ui) {
     }
     ui.separator();
     let current = app.smart_art_item.filter(|i| *i < g.items.len());
-    ui.horizontal_wrapped(|ui| {
+    let buttons = |ui: &mut Ui| {
         let at = current.map_or(json!({}), |i| json!({"after": i}));
         if ui.add_enabled(g.items.len() < MAX_ITEMS, egui::Button::new(tl!("Add"))).clicked() {
             app.smart_art_typing = None;
@@ -328,7 +328,14 @@ pub fn text_pane(app: &mut WordApp, ui: &mut Ui) {
                 app.smart_art_item = i.checked_sub(1);
             }
         }
-    });
+    };
+    if rtl::is_rtl() {
+        // The buttons wrap from the right, whatever the parent's layout.
+        let size = vec2(ui.available_width().max(0.0), ui.spacing().interact_size.y);
+        ui.allocate_ui_with_layout(size, egui::Layout::right_to_left(egui::Align::Center).with_main_wrap(true), buttons);
+    } else {
+        ui.horizontal_wrapped(buttons);
+    }
 }
 
 #[cfg(test)]

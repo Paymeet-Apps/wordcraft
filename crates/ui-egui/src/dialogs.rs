@@ -4424,7 +4424,50 @@ mod tests {
             ("compare", |a| named(a, "compare"), Ends::Ok("OK", "Cancel")),
             ("combine", |a| named(a, "combine"), Ends::Ok("OK", "Cancel")),
             ("autoCorrect", |a| named(a, "autoCorrect"), Ends::Ok("OK", "Cancel")),
+            // The other pages and variants of the same dialogs.
+            (
+                "controlProperties (date)",
+                |a| {
+                    a.run("developer.datePicker", json!({})).unwrap();
+                    named(a, "controlProperties");
+                },
+                Ends::Ok("OK", "Cancel"),
+            ),
+            (
+                "controlProperties (check box)",
+                |a| {
+                    a.run("developer.checkBox", json!({})).unwrap();
+                    named(a, "controlProperties");
+                },
+                Ends::Ok("OK", "Cancel"),
+            ),
+            (
+                "compare (more)",
+                |a| {
+                    named(a, "compare");
+                    if let Some(Dialog::Review(d)) = &mut a.dialog
+                        && let crate::dialogs_review::ReviewDialog::Compare(f) = &mut **d
+                    {
+                        f.more = true;
+                    }
+                },
+                Ends::Ok("OK", "Cancel"),
+            ),
+            ("autoCorrect (as you type)", |a| autocorrect(a, 1, false), Ends::Ok("OK", "Cancel")),
+            ("autoCorrect (math)", |a| autocorrect(a, 2, false), Ends::Ok("OK", "Cancel")),
+            ("autoCorrect (exceptions)", |a| autocorrect(a, 0, true), Ends::Ok("OK", "Cancel")),
         ]
+    }
+
+    /// AutoCorrect on page `tab`, its exceptions shown or not.
+    fn autocorrect(a: &mut WordApp, tab: u8, exceptions: bool) {
+        named(a, "autoCorrect");
+        if let Some(Dialog::Review(d)) = &mut a.dialog
+            && let crate::dialogs_review::ReviewDialog::AutoCorrect(f) = &mut **d
+        {
+            f.tab = tab;
+            f.show_exceptions = exceptions;
+        }
     }
 
     /// The buttons labelled `label` inside `area` (the open dialog's window).
@@ -4437,10 +4480,12 @@ mod tests {
     /// `dialogs_refs`, `dialogs_review`, `dialogs_ribbon`, `dialogs_smart_art` and
     /// `dialogs_templates`, for a few frames in Arabic and in English: nothing panics, every
     /// window is finite, inside the screen whenever it is in English, no more than 40 pt wider in
-    /// Arabic, and it ends mirrored:
-    /// OK right of Cancel (a lone Close at the left) in Arabic, the reverse in English.
+    /// Arabic, and it ends mirrored: at the end edge (the left in Arabic, the right in English),
+    /// OK right of Cancel in Arabic and left of it in English, a lone Close at that edge.
     #[test]
-    fn every_dialog_opens_in_arabic_without_panicking_and_ok_is_rightmost() {
+    fn every_dialog_opens_in_arabic_without_panicking_and_ends_mirror() {
+        // How close the closing buttons sit to the window's end edge (its frame and margin).
+        const EDGE: f32 = 24.0;
         let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(1440.0, 900.0));
         let mut failures = Vec::new();
         for (name, setup, ends) in part2_dialogs() {
@@ -4473,17 +4518,25 @@ mod tests {
                             Some((o, c)) if !arabic && o.right() > c.left() + 0.5 => {
                                 failures.push(format!("{name} (en): {primary} {o:?} is not left of {other} {c:?}"));
                             }
-                            _ => {}
+                            Some((o, c)) => {
+                                // The group sits at the end edge.
+                                let gap = if arabic { o.left().min(c.left()) - area.left() } else { area.right() - o.right().max(c.right()) };
+                                if gap > EDGE {
+                                    failures.push(format!("{name} ({lang}): {primary}/{other} are {gap} pt from the end edge of {area:?}"));
+                                }
+                            }
                         }
                     }
                     Ends::Close => {
                         let close = dialog_buttons(&h, area, crate::i18n::tr(l, "Close"));
                         match close.last() {
                             None => failures.push(format!("{name} ({lang}): no Close button")),
-                            Some(c) if arabic == (c.center().x > area.center().x) => {
-                                failures.push(format!("{name} ({lang}): Close {c:?} is on the wrong side of {area:?}"));
+                            Some(c) => {
+                                let gap = if arabic { c.left() - area.left() } else { area.right() - c.right() };
+                                if gap > EDGE {
+                                    failures.push(format!("{name} ({lang}): Close {c:?} is {gap} pt from the end edge of {area:?}"));
+                                }
                             }
-                            _ => {}
                         }
                     }
                 }
