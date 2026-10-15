@@ -4546,8 +4546,10 @@ mod tests {
             if let [false, true] = inside[..] {
                 failures.push(format!("{name}: inside the screen in english, not in arabic"));
             }
+            // Arabic wording may run longer than English (AutoCorrect: +12%); a sizing leak is far
+            // wider (Table Properties once came out 960 pt against 354 pt).
             if let [ar, en] = widths[..]
-                && ar > en + 40.0
+                && ar > (en + 40.0).max(en * 1.15)
             {
                 failures.push(format!("{name}: {ar} pt wide in arabic, {en} pt in english"));
             }
