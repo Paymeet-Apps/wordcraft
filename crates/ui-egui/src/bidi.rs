@@ -200,6 +200,93 @@ pub(crate) fn visual(s: &str, base_rtl: bool) -> Cow<'_, str> {
     if out == s { Cow::Borrowed(s) } else { Cow::Owned(out) }
 }
 
+/// Does `s` have a right-to-left character or a bidi control, so drawing it needs reordering?
+pub(crate) fn has_rtl(s: &str) -> bool {
+    s.chars().any(|c| is_strong_rtl(c) || is_bidi_control(c))
+}
+
+/// Document or user text drawn on its own (a heading, a file name, a style name, a comment): in
+/// draw order, in its own direction (its first strong character), whatever the interface
+/// language. Text with no right-to-left character comes back as it is.
+pub(crate) fn own(s: &str) -> Cow<'_, str> {
+    visual(s, first_strong_is_rtl(s))
+}
+
+/// [`visual`] for a line whose parts are styled differently (a find hit inside its context): the
+/// byte ranges of `line` in the order they are drawn, each with whether its characters are
+/// mirrored (brackets in a right-to-left run). Bidi control characters stay inside the ranges;
+/// the caller drops them ([`piece_text`]). Callers may split a range at their own boundaries:
+/// the characters inside one are always in logical order. `{name}` tokens get no special
+/// treatment (this is for document text). One range for text beyond the 64 KiB cap.
+pub(crate) fn visual_pieces(line: &str, base_rtl: bool) -> Vec<(std::ops::Range<usize>, bool)> {
+    if line.len() > MAX_LEN || (!base_rtl && !line.chars().any(|c| is_strong_rtl(c) || is_bidi_control(c))) {
+        return vec![(0..line.len(), false)];
+    }
+    let base = if base_rtl { Level::rtl() } else { Level::ltr() };
+    let info = BidiInfo::new(line, Some(base));
+    let mut out = Vec::new();
+    for para in &info.paragraphs {
+        let (levels, runs) = info.visual_runs(para, para.range.clone());
+        for run in runs {
+            if !levels.get(run.start).is_some_and(|l| l.is_rtl()) {
+                out.push((run, false));
+                continue;
+            }
+            // As `push_rtl_run`: segments reversed, strong-RTL ones as they are, the rest
+            // mirrored. A control character never starts or ends a segment of its own kind.
+            let mut segments: Vec<(usize, usize, bool)> = Vec::new();
+            for (i, c) in line.get(run.clone()).unwrap_or_default().char_indices() {
+                let start = run.start.saturating_add(i);
+                let end = start.saturating_add(c.len_utf8());
+                let control = is_bidi_control(c);
+                let joins = matches!(c, '\u{200C}' | '\u{200D}') || bidi_class(c) == BidiClass::NSM;
+                match segments.last_mut() {
+                    Some(last) if control => last.1 = end,
+                    Some(last) if last.2 && (is_strong_rtl(c) || joins || is_arabic_block(c)) => last.1 = end,
+                    _ => segments.push((start, end, !control && (is_strong_rtl(c) || is_arabic_block(c)))),
+                }
+            }
+            out.extend(segments.iter().rev().map(|&(a, b, rtl)| (a..b, !rtl)));
+        }
+    }
+    out
+}
+
+/// The text of one [`visual_pieces`] range (or part of one): bidi controls dropped, brackets
+/// mirrored when the piece says so.
+pub(crate) fn piece_text(s: &str, mirror: bool) -> String {
+    s.chars().filter(|&c| !is_bidi_control(c)).map(|c| if mirror { mirrored(c) } else { c }).collect()
+}
+
+/// Lines of `text` (one paragraph) broken at spaces so each measures at most `width`, as byte
+/// ranges in logical order; the space a line breaks at belongs to neither line. A word wider
+/// than `width` sits alone on its line. Text without a word gives one empty line.
+pub(crate) fn line_ranges(text: &str, width: f32, measure: impl Fn(&str) -> f32) -> Vec<std::ops::Range<usize>> {
+    let mut lines = Vec::new();
+    let mut start: Option<usize> = None;
+    let mut end: usize = 0;
+    let mut pos: usize = 0;
+    for word in text.split(' ') {
+        let (ws, we) = (pos, pos.saturating_add(word.len()));
+        pos = we.saturating_add(1);
+        if word.is_empty() {
+            continue;
+        }
+        match start {
+            None => start = Some(ws),
+            Some(s) if measure(text.get(s..we).unwrap_or_default()) <= width => {}
+            Some(s) => {
+                lines.push(s..end);
+                start = Some(ws);
+            }
+        }
+        end = we;
+    }
+    let s = start.unwrap_or(0);
+    lines.push(s..end.max(s));
+    lines
+}
+
 /// Breaks `text` at spaces so each line measures at most `width` (by `measure`), then converts
 /// every line with [`visual`]. egui would otherwise wrap the already-reordered string and put the
 /// logical end of the text on top. A word wider than `width` sits alone on its line; empty text
@@ -283,6 +370,49 @@ mod tests {
 
     fn x_of(g: &[(char, f32, Id)], c: char) -> f32 {
         g.iter().find(|t| t.0 == c).unwrap_or_else(|| panic!("no glyph for {c}: {g:?}")).1
+    }
+
+    /// `visual_pieces` joined back is exactly `visual` (for text without `{name}` tokens), so a
+    /// styled line reads as the plain one would.
+    #[test]
+    fn visual_pieces_join_to_visual() {
+        for s in [
+            "",
+            "plain English (no change)",
+            "مقدمة 1",
+            "هذا تقرير قصير",
+            "تقرير (مالي) 2024",
+            "حفظ PDF الآن",
+            "Report: تقرير مالي.docx",
+            "a\u{200F}b مرحبا\u{2066}x\u{2069}",
+            "\u{200F}مرحبا (x)",
+            "مرحبا، عالم «نعم»",
+            "\u{0651}\u{064E}ب",
+        ] {
+            for base in [false, true] {
+                let joined: String =
+                    super::visual_pieces(s, base).into_iter().map(|(r, m)| super::piece_text(s.get(r).unwrap_or_default(), m)).collect();
+                assert_eq!(joined, visual(s, base), "{s:?} base_rtl={base}");
+            }
+        }
+    }
+
+    #[test]
+    fn line_ranges_break_at_spaces() {
+        let measure = |t: &str| t.chars().count() as f32;
+        let lines = |s: &'static str, w: f32| super::line_ranges(s, w, measure).into_iter().map(|r| &s[r]).collect::<Vec<_>>();
+        assert_eq!(lines("aa bb cc  dd", 5.0), ["aa bb", "cc", "dd"]);
+        assert_eq!(lines("averylongword x", 3.0), ["averylongword", "x"]);
+        assert_eq!(lines("", 3.0), [""]);
+        assert_eq!(lines("   ", 3.0), [""]);
+        assert_eq!(lines("مرحبا بكم", 20.0), ["مرحبا بكم"]);
+    }
+
+    #[test]
+    fn own_converts_in_the_text_s_own_direction() {
+        assert!(matches!(super::own("Budget (draft)"), Cow::Borrowed("Budget (draft)")));
+        assert_eq!(super::own("مقدمة 1"), visual("مقدمة 1", true));
+        assert_eq!(super::own("Intro مقدمة 1"), visual("Intro مقدمة 1", false));
     }
 
     #[test]

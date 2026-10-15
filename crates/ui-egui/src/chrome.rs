@@ -355,17 +355,14 @@ pub fn title_bar(app: &mut WordApp, ui: &mut Ui) {
                 // No document open (#1129): the app's name alone.
                 "WordCraft".to_string()
             } else {
-                format!(
-                    "{} — {}",
-                    app.title_stem(),
-                    if app.session.dirty {
-                        tl!("Edited")
-                    } else if app.session.path.is_some() {
-                        tl!("Saved")
-                    } else {
-                        tl!("Not saved")
-                    }
-                )
+                let status = if app.session.dirty {
+                    tl!("Edited")
+                } else if app.session.path.is_some() {
+                    tl!("Saved")
+                } else {
+                    tl!("Not saved")
+                };
+                caption_title(&app.title_stem(), status)
             };
             let font = TypeRung::Chrome.semibold();
             let track = TypeRung::Chrome.tracking();
@@ -579,6 +576,18 @@ impl WordApp {
         }
         self.word_count.1
     }
+}
+
+/// The caption's `name — status`, in draw order. The name (logical, from `title_stem`) is
+/// isolated in its own direction, so an Arabic file name reads right to left in an English
+/// caption; under RTL the whole line reads from the right, the status (draw-order catalog text)
+/// at its left end.
+fn caption_title(name: &str, status: &str) -> String {
+    if !rtl::is_rtl() {
+        return format!("{} — {status}", crate::i18n::user_text(name));
+    }
+    let status = crate::i18n::logical(status).unwrap_or(status);
+    crate::bidi::visual(&format!("\u{2068}{name}\u{2069} — {status}"), true).into_owned()
 }
 
 #[cfg(test)]

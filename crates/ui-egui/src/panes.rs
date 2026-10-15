@@ -162,12 +162,21 @@ fn nav(app: &mut WordApp, ui: &mut Ui) {
                 let hit = p.text.get(a.off..b.off).unwrap_or("");
                 let post = p.text.get(b.off..to).unwrap_or("");
                 let mut job = egui::text::LayoutJob::default();
-                let fmt = |c| egui::TextFormat { font_id: regular(12.0), color: c, ..Default::default() };
-                job.append(pre, 0.0, fmt(ui.visuals().text_color()));
+                let plain = egui::TextFormat { font_id: regular(12.0), color: ui.visuals().text_color(), ..Default::default() };
                 // The match is marked the way Find marks it on the page, per theme (#656).
                 let mark = Tokens::get(ui.ctx()).find_highlight;
-                job.append(hit, 0.0, egui::TextFormat { font_id: semibold(12.0), background: mark, color: ui.visuals().text_color(), ..Default::default() });
-                job.append(post, 0.0, fmt(ui.visuals().text_color()));
+                let marked = egui::TextFormat { font_id: semibold(12.0), background: mark, color: ui.visuals().text_color(), ..Default::default() };
+                let snippet = p.text.get(from..to).unwrap_or("");
+                if !crate::bidi::has_rtl(snippet) {
+                    job.append(pre, 0.0, plain.clone());
+                    job.append(hit, 0.0, marked);
+                    job.append(post, 0.0, plain);
+                } else {
+                    let (hit_from, hit_to) = (a.off.saturating_sub(from), b.off.saturating_sub(from));
+                    let measure = |s: &str| ui.fonts_mut(|f| f.layout_no_wrap(s.to_string(), semibold(12.0), egui::Color32::WHITE).size().x);
+                    let base_rtl = p.props.bidi.unwrap_or_else(|| crate::bidi::first_strong_is_rtl(&p.text));
+                    bidi_snippet(&mut job, snippet, base_rtl, (hit_from, hit_to), ui.available_width(), measure, &plain, &marked);
+                }
                 job.wrap.max_width = ui.available_width();
                 if ui.add(egui::Button::new(job).frame(false)).clicked() {
                     let _ = app.run("select.range", json!({"anchor": a, "focus": b}));
@@ -210,18 +219,86 @@ fn nav(app: &mut WordApp, ui: &mut Ui) {
     });
 }
 
+/// A find result's line of context with right-to-left text, appended to `job` in draw order:
+/// broken into lines in logical order (each at most `width`), each line reordered as a whole
+/// (`base_rtl` is the paragraph's direction) and cut where the hit (`hit`, byte offsets in
+/// `snippet`) starts and ends, so the hit keeps its mark wherever it lands.
+#[allow(clippy::too_many_arguments)]
+fn bidi_snippet(
+    job: &mut egui::text::LayoutJob,
+    snippet: &str,
+    base_rtl: bool,
+    hit: (usize, usize),
+    width: f32,
+    measure: impl Fn(&str) -> f32,
+    plain: &egui::TextFormat,
+    marked: &egui::TextFormat,
+) {
+    let lines = crate::bidi::line_ranges(snippet, width, measure);
+    for (n, line) in lines.iter().enumerate() {
+        if n > 0 {
+            job.append("\n", 0.0, plain.clone());
+        }
+        let text = snippet.get(line.clone()).unwrap_or_default();
+        for (piece, mirror) in crate::bidi::visual_pieces(text, base_rtl) {
+            // Offsets of the piece in `snippet`, cut at the hit's two ends.
+            let (start, end) = (line.start.saturating_add(piece.start), line.start.saturating_add(piece.end));
+            let mut cuts = vec![start, end];
+            cuts.extend([hit.0, hit.1].into_iter().filter(|c| *c > start && *c < end));
+            cuts.sort_unstable();
+            for w in cuts.windows(2) {
+                let (Some(&x), Some(&y)) = (w.first(), w.get(1)) else { continue };
+                let Some(part) = snippet.get(x..y) else { continue };
+                let format = if x >= hit.0 && y <= hit.1 && hit.0 < hit.1 { marked } else { plain };
+                job.append(&crate::bidi::piece_text(part, mirror), 0.0, format.clone());
+            }
+        }
+    }
+}
+
 /// Constrain each heading to the available pane width so long document text cannot
-/// enlarge the panel. The full heading stays accessible on hover.
+/// enlarge the panel. The full heading stays accessible on hover. Headings draw in bidi order
+/// (an Arabic heading reads right to left in any interface language).
 fn nav_heading(ui: &mut Ui, level: u8, text: &str, selected: bool) -> egui::Response {
+    let font = if level == 0 { semibold(12.5) } else { regular(12.5) };
     crate::rtl::row(ui, |ui| {
         ui.add_space(level as f32 * 14.0);
+        let room = ui.available_width() - 2.0 * ui.spacing().button_padding.x;
+        let shown = fit_user_text(ui, text, &font, room);
         ui.add_sized(
             vec2(ui.available_width(), ui.spacing().interact_size.y),
-            egui::Button::selectable(selected, egui::RichText::new(text).font(if level == 0 { semibold(12.5) } else { regular(12.5) })).truncate(),
+            egui::Button::selectable(selected, egui::RichText::new(shown).font(font)).truncate(),
         )
-        .on_hover_text(text)
+        .on_hover_text(crate::i18n::user_text(text).into_owned())
     })
     .inner
+}
+
+/// Document text for one line `width` wide, in draw order. Left-to-right text is returned as it is
+/// (egui truncates it at its end). Text that needs reordering is cut in logical order, with "…"
+/// at its logical end, before it is converted: egui would cut the drawn string at its right,
+/// which is the start of a right-to-left text.
+fn fit_user_text<'a>(ui: &Ui, text: &'a str, font: &egui::FontId, width: f32) -> std::borrow::Cow<'a, str> {
+    let shown = crate::i18n::user_text(text);
+    if matches!(shown, std::borrow::Cow::Borrowed(_)) {
+        return shown;
+    }
+    let measure = |s: &str| ui.fonts_mut(|f| f.layout_no_wrap(s.to_string(), font.clone(), egui::Color32::WHITE).size().x);
+    if measure(&shown) <= width {
+        return shown;
+    }
+    let rtl = crate::bidi::first_strong_is_rtl(text);
+    let ends: Vec<usize> = text.char_indices().map(|(i, _)| i).skip(1).collect();
+    let cut = |n: usize| {
+        crate::bidi::visual(&format!("{}…", text.get(..ends.get(n).copied().unwrap_or(text.len())).unwrap_or_default().trim_end()), rtl).into_owned()
+    };
+    // The longest prefix that fits, by bisection over its length in characters (bounded by the text).
+    let (mut lo, mut hi) = (0usize, ends.len());
+    while lo < hi {
+        let mid = lo + (hi - lo).div_ceil(2);
+        if measure(&cut(mid)) <= width { lo = mid } else { hi = mid - 1 }
+    }
+    std::borrow::Cow::Owned(cut(lo))
 }
 
 /// Items collected by Copy and Cut, newest first; clicking one pastes it at the caret.
@@ -282,12 +359,8 @@ fn styles(app: &mut WordApp, ui: &mut Ui) {
         .styles
         .get(&cur)
         .map(crate::i18n::style_name)
-        .unwrap_or_else(|| st.get("styleName").and_then(Value::as_str).unwrap_or("").to_string());
-    // A built-in name comes translated (draw order); an author's style name is converted here.
-    let current_name = match app.session.doc.styles.get(&cur) {
-        Some(style) if style.builtin => current_name,
-        _ => crate::i18n::isolate(&current_name),
-    };
+        .unwrap_or_else(|| crate::i18n::user_text(st.get("styleName").and_then(Value::as_str).unwrap_or("")).into_owned());
+    // `style_name` gives draw order for built-in and author's names alike.
     ui.label(egui::RichText::new(crate::i18n::fmt_translated(tl!("Current style: {style}"), &[("style", &current_name)])).small());
     crate::rtl::row(ui, |ui| {
         if ui.button(tl!("New Style…")).clicked() {
@@ -368,7 +441,7 @@ fn comments(app: &mut WordApp, ui: &mut Ui) {
                     ui.add_space(0.0);
                 }
                 crate::rtl::row(ui, |ui| {
-                    ui.label(egui::RichText::new(c.get("author").and_then(Value::as_str).unwrap_or("")).font(semibold(12.0)));
+                    ui.label(egui::RichText::new(crate::i18n::user_text(c.get("author").and_then(Value::as_str).unwrap_or(""))).font(semibold(12.0)));
                     ui.label(egui::RichText::new(comment_stamp(c.get("date").and_then(Value::as_str).unwrap_or(""))).small().weak());
                     if c.get("resolved").and_then(Value::as_bool).unwrap_or(false) {
                         ui.label(egui::RichText::new(tl!("Resolved")).small().color(t.green));
@@ -423,21 +496,70 @@ fn reply_key(id: u32) -> egui::Id {
 pub(crate) fn comment_editor(app: &mut WordApp, ui: &mut Ui, id: u32, font: Option<egui::FontId>, focus: bool) {
     let Some(part) = app.session.doc.comments.get(&id).map(|c| c.part) else { return };
     let key = edit_key(id);
-    let mut text = ui.data(|d| d.get_temp::<String>(key)).unwrap_or_else(|| app.session.doc.plain_text(StoryRef::Part(part)));
+    let open_key = egui::Id::new(("comment_edit_open", id));
+    let draft = ui.data(|d| d.get_temp::<String>(key));
+    let opened = ui.data(|d| d.get_temp::<bool>(open_key)).unwrap_or(false);
+    let mut text = draft.clone().unwrap_or_else(|| app.session.doc.plain_text(StoryRef::Part(part)));
+    // egui's text field draws its text in logical order, so right-to-left text shows in bidi
+    // order while it isn't being edited, and becomes the field when clicked.
+    if draft.is_none() && !focus && !opened && crate::bidi::has_rtl(&text) && text.len() <= MAX_SHOWN_COMMENT {
+        let font = font.unwrap_or_else(|| egui::TextStyle::Body.resolve(ui.style()));
+        let r = user_text_block(ui, &text, &font).on_hover_cursor(egui::CursorIcon::Text);
+        if r.clicked() {
+            ui.data_mut(|d| d.insert_temp(open_key, true));
+            ui.data_mut(|d| d.insert_temp(egui::Id::new(("comment_edit_focus", id)), true));
+            ui.ctx().request_repaint();
+        }
+        return;
+    }
     let mut edit = egui::TextEdit::multiline(&mut text).desired_rows(1).desired_width(f32::INFINITY).hint_text(tl!("Add a comment"));
     if let Some(f) = font {
         edit = edit.font(f);
     }
     let r = ui.add(edit);
-    if focus {
+    let clicked_open = opened && ui.data_mut(|d| d.remove_temp::<bool>(egui::Id::new(("comment_edit_focus", id)))).unwrap_or(false);
+    if focus || clicked_open {
         r.request_focus();
     }
     if r.changed() {
         ui.data_mut(|d| d.insert_temp(key, text));
     }
     if r.lost_focus() {
+        ui.data_mut(|d| d.remove::<bool>(open_key));
         commit_comment(app, ui.ctx(), id);
     }
+}
+
+/// Longest comment text drawn in bidi order (longer ones show in the text field as they are).
+const MAX_SHOWN_COMMENT: usize = 8 * 1024;
+
+/// Document text of several paragraphs, each wrapped to the width in logical order and drawn in
+/// bidi order in its own direction (right-to-left paragraphs at the right). Clickable.
+fn user_text_block(ui: &mut Ui, text: &str, font: &egui::FontId) -> egui::Response {
+    let width = ui.available_width();
+    let color = ui.visuals().text_color();
+    let measure = |s: &str| ui.fonts_mut(|f| f.layout_no_wrap(s.to_string(), font.clone(), color).size().x);
+    let paragraphs: Vec<(bool, Vec<String>)> = text
+        .split('\n')
+        .map(|para| {
+            let rtl = crate::bidi::first_strong_is_rtl(para);
+            (rtl, crate::bidi::wrap(para, rtl, width, measure))
+        })
+        .collect();
+    ui.scope(|ui| {
+        ui.set_width(width);
+        ui.spacing_mut().item_spacing.y = 0.0;
+        for (rtl, lines) in paragraphs {
+            let align = if rtl { egui::Align::Max } else { egui::Align::Min };
+            ui.with_layout(egui::Layout::top_down(align), |ui| {
+                for line in lines {
+                    ui.add(egui::Label::new(egui::RichText::new(line).font(font.clone())).wrap_mode(egui::TextWrapMode::Extend).selectable(false));
+                }
+            });
+        }
+    })
+    .response
+    .interact(egui::Sense::click())
 }
 
 /// Write a comment's draft text back, when it has one that differs from the comment.
@@ -507,7 +629,10 @@ fn inspector(app: &mut WordApp, ui: &mut Ui) {
     let cstyle = chr["styleName"].as_str().map(str::to_string);
     // Built-in style names show in the interface language; the document keeps the English ones.
     let shown = |id: &Value, name: &str| {
-        id.as_str().and_then(|id| app.session.doc.styles.get(id)).map(crate::i18n::style_name).unwrap_or_else(|| name.to_string())
+        id.as_str()
+            .and_then(|id| app.session.doc.styles.get(id))
+            .map(crate::i18n::style_name)
+            .unwrap_or_else(|| crate::i18n::user_text(name).into_owned())
     };
     let pstyle_shown = shown(&para["style"], &pstyle);
     let cstyle_shown = cstyle.as_deref().map(|n| shown(&chr["style"], n));
@@ -865,5 +990,122 @@ mod navigation_tests {
             );
             output.drop_without_applying_deltas();
         }
+    }
+}
+
+/// Document and user text in the panes draws in bidi order in any interface language (L10N-AR.14):
+/// an Arabic heading in an English interface reads right to left.
+#[cfg(test)]
+mod chrome_text_tests {
+    use crate::bidi::visual;
+    use crate::{Services, WordApp};
+    use egui_kittest::kittest::Queryable;
+    use serde_json::json;
+
+    fn harness(a: WordApp) -> egui_kittest::Harness<'static, WordApp> {
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(
+            |ui, app: &mut WordApp| {
+                let ctx = ui.ctx().clone();
+                app.logic(&ctx);
+                app.ui(ui);
+            },
+            a,
+        );
+        h.run_steps(5);
+        h
+    }
+
+    fn app_with(text: &str) -> WordApp {
+        let mut a = WordApp::new(wordcraft_engine::Session::new(wordcraft_doc::Document::new()), Services::default());
+        a.run("text.insert", json!({"text": text})).unwrap();
+        a
+    }
+
+    #[test]
+    fn arabic_headings_read_in_order_in_the_navigation_pane() {
+        let mut a = app_with("مقدمة 1");
+        a.run("para.style", json!({"style": "Heading1"})).unwrap();
+        a.run("view.navigationPane", json!({"value": true})).unwrap();
+        let h = harness(a);
+        let drawn = visual("مقدمة 1", true);
+        assert_ne!(drawn, "مقدمة 1", "the probe must need reordering");
+        assert!(h.query_by_label(&drawn).is_some(), "the pane draws the heading as {drawn:?}");
+        assert!(h.query_by_label("مقدمة 1").is_none(), "not in logical order");
+    }
+
+    /// Latin headings are drawn exactly as before.
+    /// A long Arabic heading is cut at its logical end: the drawn line starts (at the left) with
+    /// "…" and keeps the heading's first word, and the pane keeps its width.
+    #[test]
+    fn long_arabic_headings_are_cut_at_their_logical_end() {
+        let text = "مقدمة الفصل الأول عن تاريخ الطباعة ".repeat(12);
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 600.0));
+        let mut panel = egui::Rect::NOTHING;
+        let out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+            panel = egui::Panel::left("navigation_test").default_size(260.0).show(ui, |ui| super::nav_heading(ui, 0, &text, false)).response.rect;
+        });
+        assert!(panel.width() < 280.0, "{panel:?}");
+        let drawn: Vec<String> = out
+            .shapes
+            .iter()
+            .filter_map(|s| if let egui::Shape::Text(t) = &s.shape { Some(t.galley.text().to_string()) } else { None })
+            .filter(|t| t.contains('…'))
+            .collect();
+        out.drop_without_applying_deltas();
+        assert_eq!(drawn.len(), 1, "{drawn:?}");
+        assert!(drawn[0].starts_with('…') && drawn[0].ends_with("مقدمة"), "cut at the logical end: {drawn:?}");
+    }
+
+    /// Clicking an Arabic comment's text opens its text field, holding the logical text.
+    #[test]
+    fn clicking_an_arabic_comment_edits_it() {
+        let mut a = app_with("Body");
+        a.run("select.all", json!({})).unwrap();
+        a.run("review.newComment", json!({"text": "راجع هذه الفقرة"})).unwrap();
+        a.run("view.commentsPane", json!({"value": true})).unwrap();
+        let mut h = harness(a);
+        let drawn = visual("راجع هذه الفقرة", true);
+        h.get_by_label(&drawn).click();
+        h.run_steps(4);
+        assert!(h.query_by_label(&drawn).is_none(), "the text field replaced the drawn text");
+        assert!(h.query_by_value("راجع هذه الفقرة").is_some(), "the field holds the comment's text");
+    }
+
+    #[test]
+    fn latin_headings_are_unchanged_in_the_navigation_pane() {
+        let mut a = app_with("Introduction (part 1)");
+        a.run("para.style", json!({"style": "Heading1"})).unwrap();
+        a.run("view.navigationPane", json!({"value": true})).unwrap();
+        let h = harness(a);
+        assert!(h.query_by_label("Introduction (part 1)").is_some());
+    }
+
+    /// A find hit in an Arabic paragraph: the result line reads right to left, hit included.
+    #[test]
+    fn find_results_with_arabic_read_in_order() {
+        let text = "هذا تقرير قصير";
+        let mut a = app_with(text);
+        a.run("view.navigationPane", json!({"value": true})).unwrap();
+        a.session.run("edit.find", &json!({"text": "تقرير"})).unwrap();
+        a.ui.nav_tab = "results".into();
+        let h = harness(a);
+        let drawn = visual(text, true);
+        assert!(h.query_by_label(&drawn).is_some(), "the result draws as {drawn:?}");
+    }
+
+    #[test]
+    fn arabic_comment_author_and_text_read_in_order() {
+        let mut a = app_with("Body");
+        a.session.author = "سارة أحمد".into();
+        a.run("select.all", json!({})).unwrap();
+        a.run("review.newComment", json!({"text": "راجع هذه الفقرة"})).unwrap();
+        a.run("view.commentsPane", json!({"value": true})).unwrap();
+        let h = harness(a);
+        let author = visual("سارة أحمد", true);
+        assert!(h.query_by_label(&author).is_some(), "the author draws as {author:?}");
+        let text = visual("راجع هذه الفقرة", true);
+        assert!(h.query_by_label(&text).is_some(), "the comment text draws as {text:?}");
     }
 }

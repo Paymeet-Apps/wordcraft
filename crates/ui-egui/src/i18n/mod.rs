@@ -507,11 +507,35 @@ pub fn tr(lang: Lang, s: &str) -> &str {
     lang.catalog().plain(s).unwrap_or(s)
 }
 
+/// `s` in the current language in reading (logical) order, for text that goes into a document
+/// (the style-set previews), never into egui: documents do their own bidi, so draw order would be
+/// reordered twice. Same as [`t`] for left-to-right languages.
+pub fn t_logical(s: &str) -> &str {
+    let drawn = t(s);
+    logical(drawn).unwrap_or(drawn)
+}
+
+/// [`t_logical`] worded for `context`, as [`tc`].
+pub fn tc_logical<'a>(context: &str, s: &'a str) -> &'a str {
+    let drawn = tc(context, s);
+    logical(drawn).unwrap_or(drawn)
+}
+
+/// Document or user text drawn on its own in the interface (a heading in the Navigation pane, a
+/// file name, an author's style or bookmark name): in draw order and in its own direction, in
+/// every interface language, since an English interface shows Arabic documents too. Text with no
+/// right-to-left character is returned as it is. To insert such text into a translated sentence,
+/// use [`fmt`] (or [`isolate`] with [`fmt_translated`]) instead.
+pub fn user_text(s: &str) -> std::borrow::Cow<'_, str> {
+    crate::bidi::own(s)
+}
+
 /// A style's name as the interface shows it: built-in styles (`Normal`, `Heading 2`, `TOC 3`) in
-/// the current language, styles the author made exactly as named. Display only: the document,
-/// commands and saved files keep the English name.
+/// the current language, styles the author made as named, in draw order ([`user_text`]). Display
+/// only: the document, commands and saved files keep the English name. Both kinds come back in
+/// draw order, so insert either into a sentence with [`fmt_translated`].
 pub fn style_name(style: &wordcraft_doc::Style) -> String {
-    if style.builtin { builtin_style_name(&style.name) } else { style.name.clone() }
+    if style.builtin { builtin_style_name(&style.name) } else { user_text(&style.name).into_owned() }
 }
 
 /// A built-in style's English name in the current language; numbered families go through one

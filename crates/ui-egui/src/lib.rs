@@ -1323,7 +1323,9 @@ impl WordApp {
     /// fallback faces, as IME composition does (#565). A CJK name uses the CJK UI font instead:
     /// those collections are too large to add here.
     fn ensure_caption_fonts(&mut self) {
-        let stem = self.title_stem();
+        // The untitled name is interface text, which the interface fonts cover (an Arabic
+        // interface installs its own face); borrowing a face for it would outlive the language.
+        let Some(stem) = self.document_name() else { return };
         if stem.chars().any(wordcraft_fonts::is_cjk) {
             self.want_system_cjk = true;
         }
@@ -1338,17 +1340,19 @@ impl WordApp {
     }
 
     /// Document title for the title bar (and the suggested file name). An untitled document is
-    /// named in the interface language, as `Document1` is in English.
+    /// named in the interface language, as `Document1` is in English. Always in reading (logical)
+    /// order: it becomes a file name, the operating system's window title, the accessibility
+    /// tree's and the control channel's title. Text egui draws converts it (`chrome.rs`).
     pub fn title_stem(&self) -> String {
+        self.document_name().unwrap_or_else(|| i18n::t_logical("Document1").to_string())
+    }
+
+    /// The document's own name (the file's, or its Title property), when it has one: text from
+    /// the document, unlike the untitled name, which is interface text.
+    fn document_name(&self) -> Option<String> {
         match &self.session.path {
-            Some(p) => p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| tl!("Document1").into()),
-            None => {
-                if self.session.doc.core.title.is_empty() {
-                    tl!("Document1").into()
-                } else {
-                    self.session.doc.core.title.clone()
-                }
-            }
+            Some(p) => p.file_stem().map(|s| s.to_string_lossy().to_string()),
+            None => (!self.session.doc.core.title.is_empty()).then(|| self.session.doc.core.title.clone()),
         }
     }
 
@@ -2033,6 +2037,40 @@ mod tests {
         frame(&mut cjk);
         assert!(cjk.want_system_cjk, "a CJK file name loads the CJK UI font");
         assert!(cjk.canvas.ime_faces.is_empty(), "CJK collections are not copied into the fallback list");
+    }
+
+    /// L10N-AR.14: an untitled document is named in the interface language. The name itself (the
+    /// suggested file name, the operating system's window title, the control channel) stays in
+    /// reading order; only the caption the window draws is converted to draw order.
+    #[test]
+    fn untitled_arabic_document_is_named_in_reading_order() {
+        let mut a = app();
+        a.run("ui.language", json!({"value": "ar"})).unwrap();
+        let mut h = harness(a);
+        h.run_steps(4);
+        let a = h.state();
+        assert_eq!(a.title_stem(), "مستند1", "logical, not draw order");
+        assert_eq!(a.default_save_name(), "مستند1.docx");
+        assert!(a.sent_title.starts_with("مستند1"), "{}", a.sent_title);
+        let status = i18n::logical(tl!("Not saved")).unwrap_or(tl!("Not saved"));
+        let caption = crate::bidi::visual(&format!("مستند1 — {status}"), true).into_owned();
+        let found = crate::rtl::text_rects(h.output(), &caption).len();
+        i18n::set_current(i18n::Lang::EN);
+        assert_eq!(found, 1, "the caption draws {caption:?}");
+    }
+
+    /// An Arabic file name in an English interface: the caption reads it right to left, and the
+    /// status after it stays where English puts it.
+    #[test]
+    fn arabic_file_name_reads_in_order_in_an_english_caption() {
+        let mut a = app();
+        a.session.path = Some("C:/Reports/تقرير مالي.docx".into());
+        let mut h = harness(a);
+        h.run_steps(4);
+        let caption = format!("{} — Saved", crate::bidi::visual("تقرير مالي", true));
+        assert_eq!(crate::rtl::text_rects(h.output(), &caption).len(), 1, "the caption draws {caption:?}");
+        assert_eq!(h.state().title_stem(), "تقرير مالي");
+        assert!(h.state().sent_title.starts_with("تقرير مالي"), "the OS title gets reading order");
     }
 
     fn app() -> WordApp {

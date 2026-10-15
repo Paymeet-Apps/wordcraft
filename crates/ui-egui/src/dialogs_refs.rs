@@ -585,10 +585,11 @@ fn mark_ui(app: &mut WordApp, ui: &mut Ui, f: &mut MarkForm) -> Next {
             rtl::radio_value(ui, &mut f.option, "range".to_string(), tl!("Pages of bookmark:"));
         });
         ui.add_enabled_ui(f.option == "range", |ui| {
-            let opts: Vec<(String, &str)> = f.bookmarks.iter().map(|b| (b.clone(), b.as_str())).collect();
-            egui::ComboBox::from_id_salt("xe_bm").selected_text(f.bookmark.clone()).width(140.0).show_ui(ui, |ui| {
+            // Bookmark names in their own direction, in any interface language.
+            let opts: Vec<(String, String)> = f.bookmarks.iter().map(|b| (b.clone(), crate::i18n::user_text(b).into_owned())).collect();
+            egui::ComboBox::from_id_salt("xe_bm").selected_text(crate::i18n::user_text(&f.bookmark).into_owned()).width(140.0).show_ui(ui, |ui| {
                 for (v, l) in &opts {
-                    ui.selectable_value(&mut f.bookmark, v.clone(), *l);
+                    ui.selectable_value(&mut f.bookmark, v.clone(), l.as_str());
                 }
             });
         });
@@ -774,7 +775,7 @@ fn toc_options_ui(_app: &mut WordApp, ui: &mut Ui, f: &mut TocForm, was: &TocFor
                             [
                                 &mut |ui: &mut Ui| {
                                     // A document style name, in its own direction.
-                                    ui.label(crate::i18n::isolate(name));
+                                    ui.label(crate::i18n::user_text(name));
                                 },
                                 &mut |ui: &mut Ui| {
                                     ui.add(
@@ -819,7 +820,7 @@ fn toc_styles_ui(app: &mut WordApp, ui: &mut Ui, f: &mut TocForm, level: &mut u8
         egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
             for l in 1..=9u8 {
                 let name = app.session.doc.styles.get(&format!("TOC{l}")).map(|s| s.name.clone()).unwrap_or_else(|| format!("TOC {l}"));
-                ui.selectable_value(level, l, crate::i18n::isolate(&name));
+                ui.selectable_value(level, l, crate::i18n::user_text(&name));
             }
         });
     });
@@ -1052,7 +1053,7 @@ fn sources_ui(app: &mut WordApp, ui: &mut Ui, selected: &mut Option<usize>) -> N
                 ui.label(egui::RichText::new(tl!("No sources yet.")).color(t.text_dim));
             }
             for (i, l) in list.iter().enumerate() {
-                if ui.selectable_label(*selected == Some(i), crate::i18n::isolate(l)).clicked() {
+                if ui.selectable_label(*selected == Some(i), crate::i18n::user_text(l)).clicked() {
                     *selected = Some(i);
                 }
             }
