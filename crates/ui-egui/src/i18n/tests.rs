@@ -1218,7 +1218,7 @@ fn bundled_interface_fonts_cover_bulgarian_without_system_fallbacks() {
 static TEST_RTL: LangInfo = LangInfo {
     code: "xx-rtl",
     name: "RTL",
-    source: "\tSaved {path}\tتم الحفظ: {path}\n\tPage {page} of {pages}\tصفحة {page} من {pages}\n\tHome\tالرئيسية\n\tFont\tالخط\n\tUndo {action}\tتراجع: {action}\n\tSave PDF\tحفظ PDF\n\tChoose 2 Columns\tاختر 2 Columns لتقسيم النص المحدد في المستند الحالي إلى عمودين متساويين في العرض مع مسافة صغيرة بينهما ثم اضغط موافق للمتابعة\n",
+    source: "\tSaved {path}\tتم الحفظ: {path}\n\tPage {page} of {pages}\tصفحة {page} من {pages}\n\tHome\tالرئيسية\n\tFont\tالخط\n\tUndo {action}\tتراجع: {action}\n\tSave PDF\tحفظ PDF\n\tDOI\tDOI\n\tISBN Number\tرقم ISBN\n\tConvert\tتحويل\n\tChoose 2 Columns\tاختر 2 Columns لتقسيم النص المحدد في المستند الحالي إلى عمودين متساويين في العرض مع مسافة صغيرة بينهما ثم اضغط موافق للمتابعة\n",
     prefer_hans: false,
     rtl: true,
     editing_lang: None,
@@ -1229,6 +1229,24 @@ static TEST_RTL: LangInfo = LangInfo {
 /// draw order does not convert back with `bidi::visual`.
 const CHOOSE_2_COLUMNS: &str =
     "اختر 2 Columns لتقسيم النص المحدد في المستند الحالي إلى عمودين متساويين في العرض مع مسافة صغيرة بينهما ثم اضغط موافق للمتابعة";
+
+/// A suffix ends its label in reading order under RTL whatever script the label is in: a
+/// translation kept identical to English ("DOI"), a mixed-script one ("رقم ISBN"), an Arabic one,
+/// and a label with no translation. English is unchanged.
+#[test]
+fn suffixes_end_their_label_in_reading_order() {
+    set_current(Lang(&TEST_RTL));
+    // Draw order: the colon (the end of the caption) at the left.
+    assert_eq!(suffixed(t("DOI"), ":"), ":DOI");
+    assert_eq!(suffixed(t("ISBN Number"), ":"), ":ISBN رقم");
+    assert_eq!(suffixed(t("Convert"), "…"), "…تحويل");
+    assert_eq!(suffixed(t("Untranslated"), ":"), ":Untranslated");
+    // A counter after a word: read from the right, the word, then 3 / 9.
+    assert_eq!(suffixed(t("Convert"), " 3 / 9"), "9 / 3 تحويل");
+    set_current(Lang::EN);
+    assert_eq!(suffixed(t("DOI"), ":"), "DOI:");
+    assert_eq!(suffixed(t("Sentence"), " 3 / 9"), "Sentence 3 / 9");
+}
 
 /// Ruling R16: a long translated tooltip wraps its logical text, which the catalog keeps.
 #[test]

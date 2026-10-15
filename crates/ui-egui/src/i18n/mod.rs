@@ -569,6 +569,19 @@ pub fn fmt_translated(template: &str, args: &[(&str, &str)]) -> String {
     fill(template, args, false)
 }
 
+/// A translated label (in draw order, as `tl!` gives it) followed by `suffix`: "Author:",
+/// "Convert…", "Sentence 3 / 9". Under RTL the two are joined in logical order (the label's
+/// logical text from the catalog, or the label itself when it isn't a translation) and converted
+/// once, so the suffix ends the label in reading order whatever script the label is in: "DOI"
+/// kept as is, or "رقم ISBN", gets its colon at the left. English: `label` then `suffix`.
+pub fn suffixed(label: &str, suffix: &str) -> String {
+    if !current().is_rtl() {
+        return format!("{label}{suffix}");
+    }
+    let logical = logical(label).unwrap_or(label);
+    crate::bidi::visual(&format!("{logical}{suffix}"), true).into_owned()
+}
+
 /// A user or document value as it must be inserted into a translated sentence: converted to draw
 /// order in its own direction when the interface is right to left, else unchanged.
 pub fn isolate(value: &str) -> String {

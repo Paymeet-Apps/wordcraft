@@ -550,6 +550,33 @@ pub fn radio_value<'a, V: PartialEq>(ui: &mut Ui, current: &mut V, alternative: 
     r
 }
 
+/// `ui.horizontal_top`: a row of blocks of several lines (columns of controls, lists) whose
+/// tops line up, from the start edge (the right under RTL). English: exactly
+/// `ui.horizontal_top`. A sizing pass lays it out left to right (see [`row`]).
+///
+/// [`grid_row`] and [`row`] centre their cells on one control height, so a taller cell would
+/// stick out above its row; this one is top-aligned and as tall as its tallest block.
+pub fn row_top<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+    if !is_rtl() {
+        return ui.horizontal_top(add);
+    }
+    let size = vec2(ui.available_size_before_wrap().x.max(0.0), 0.0);
+    // A sizing pass lays it out left to right like `row` and `grid_row`, top-aligned: inside a
+    // right-aligned parent `horizontal_top` would already run right to left.
+    let layout =
+        if ui.is_sizing_pass() { Layout::left_to_right(Align::Center).with_cross_align(Align::Min) } else { Layout::right_to_left(Align::Min) };
+    ui.allocate_ui_with_layout(size, layout, add)
+}
+
+/// [`fitted`] content (a `Grid`) at the start edge of a Ui that lays out from the left, such as a
+/// `ScrollArea`'s content: at the right under RTL. English: `add(ui)` as is.
+pub fn start_fitted<R>(ui: &mut Ui, id_salt: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
+    if !is_rtl() {
+        return add(ui);
+    }
+    ui.with_layout(Layout::top_down(Align::Max), |ui| fitted(ui, id_salt, add)).inner
+}
+
 /// Test helper: the screen rect of every text shape drawn last frame whose text is `text`.
 #[cfg(test)]
 pub(crate) fn text_rects(out: &egui::FullOutput, text: &str) -> Vec<Rect> {
