@@ -185,7 +185,7 @@ pub fn picker_ui(app: &mut WordApp, ui: &mut Ui, f: &mut SmartArtForm) -> bool {
             // The first layout at the start edge (the right under RTL).
             rtl::cell_grid(ui, "smart_art_layouts", Some(vec2(8.0, 8.0)), 3, shown.len(), |ui, k| {
                 if let Some(&layout) = shown.get(k) {
-                    let (rect, resp) = ui.allocate_exact_size(vec2(96.0, 88.0), Sense::click());
+                    let (rect, resp) = ui.allocate_exact_size(vec2(96.0, 96.0), Sense::click());
                     let on = f.layout == layout;
                     let fill = if on {
                         t.checked
@@ -203,14 +203,34 @@ pub fn picker_ui(app: &mut WordApp, ui: &mut Ui, f: &mut SmartArtForm) -> bool {
                         &theme,
                         t.text_dim,
                     );
-                    ui.painter().text(
-                        pos2(rect.center().x, rect.bottom() - 11.0),
-                        egui::Align2::CENTER_CENTER,
-                        tl!(layout.label()),
-                        regular(10.5),
-                        t.text,
-                    );
-                    let resp = resp.on_hover_text(tl!(layout.label()));
+                    // A label wider than the tile (a long translation) breaks at its middle space.
+                    // Under RTL the label is in draw order: it breaks in reading order (the
+                    // catalog's logical text) and each line is converted, so the first words are on
+                    // top.
+                    let label = tl!(layout.label());
+                    let rtl = rtl::is_rtl();
+                    let source = if rtl { crate::i18n::logical(label).unwrap_or(label) } else { label };
+                    let drawn = |s: &str| if rtl { crate::bidi::visual(s, true).into_owned() } else { s.to_string() };
+                    let width = |text: &str| ui.ctx().fonts_mut(|f| f.layout_no_wrap(text.to_string(), regular(10.5), t.text).size().x);
+                    let lines = if width(label) <= rect.width() - 6.0 {
+                        vec![label.to_string()]
+                    } else {
+                        let split = source
+                            .match_indices(' ')
+                            .map(|(i, _)| (drawn(&source[..i]), drawn(&source[i + 1..])))
+                            .min_by(|a, b| width(&a.0).max(width(&a.1)).total_cmp(&width(&b.0).max(width(&b.1))));
+                        split.map_or_else(|| vec![label.to_string()], |(a, b)| vec![a, b])
+                    };
+                    for (n, line) in lines.iter().rev().enumerate() {
+                        ui.painter().text(
+                            pos2(rect.center().x, rect.bottom() - 11.0 - 12.5 * n as f32),
+                            egui::Align2::CENTER_CENTER,
+                            line,
+                            regular(10.5),
+                            t.text,
+                        );
+                    }
+                    let resp = rtl::hover_text(resp, label);
                     if resp.clicked() {
                         f.layout = layout;
                     }

@@ -227,8 +227,6 @@
 	Automatically Update Document Styles	تحديث أنماط المستند تلقائيًا
 	Automatically hyphenate document	تقسيم كلمات المستند تلقائيًا
 	Automatically update document styles	تحديث أنماط المستند تلقائيًا
-	B4 (JIS)   10.12" × 14.33"	B4 (JIS)   10.12" × 14.33"
-	B5 (JIS)   7.17" × 10.12"	B5 (JIS)   7.17" × 10.12"
 	Backspace	مسح للخلف
 	Balloons	الفقاعات
 	Banded Columns	أعمدة بنطاقات
@@ -780,9 +778,7 @@
 	Enter in Equation	إدخال في المعادلة
 	Enter page number:	أدخل رقم الصفحة:
 	Entry marked.	تم وضع علامة على الإدخال.
-	Envelope #10   4.12" × 9.50"	مظروف #10   4.12" × 9.50"
 	Envelope Address	عنوان المظروف
-	Envelope DL   4.33" × 8.66"	مظروف DL   4.33" × 8.66"
 	Envelope Return	عنوان المرسل على المظروف
 	Envelope size:	حجم المظروف:
 	Envelopes	مظاريف
@@ -811,7 +807,6 @@
 	Example: {sample}	مثال: {sample}
 	Exceptions (optional)	الاستثناءات (اختياري)
 	Exceptions…	الاستثناءات…
-	Executive   7.25" × 10.50"	Executive   7.25" × 10.50"
 	Expand	توسيع
 	Expand or Collapse Heading	توسيع العنوان أو طيّه
 	Exponential	أسي
@@ -1192,11 +1187,9 @@
 	Left:	يسار:
 	Leftwards Arrow Above	سهم لليسار في الأعلى
 	Leftwards Harpoon Above	حربة لليسار في الأعلى
-	Legal   8.50" × 14.00"	Legal   8.50" × 14.00"
 	Legal style numbering	ترقيم بالنمط القانوني
 	Legend	وسيلة الإيضاح
 	Letter	خطاب
-	Letter   8.50" × 11.00"	Letter   8.50" × 11.00"
 	Letter headings	عناوين الأحرف
 	Letter-Like Symbols	رموز شبيهة بالحروف
 	Letters	رسائل
@@ -1359,7 +1352,6 @@
 	Name (A–Z)	الاسم (أ–ي)
 	Name of the file this document is saved as	اسم الملف الذي حُفظ به هذا المستند
 	Name:	الاسم:
-	Narrow  0.5" all	ضيقة  0.5" للكل
 	Natural Logarithm	اللوغاريتم الطبيعي
 	Nature	الطبيعة
 	Navigation	التنقل
@@ -1428,7 +1420,6 @@
 	Nonbreaking Space	مسافة غير فاصلة
 	None	بلا
 	Normal	عادي
-	Normal  1" all	عادية  1" للكل
 	Normal Indent	مسافة بادئة عادية
 	Normal Style	النمط العادي
 	Normal Table	جدول عادي
@@ -2082,7 +2073,6 @@
 	Start at:	البدء من:
 	Start-up	بدء التشغيل
 	State	الولاية
-	Statement   5.50" × 8.50"	Statement   5.50" × 8.50"
 	Statistics	الإحصاءات
 	Status Bar	شريط الحالة
 	Stop	إيقاف
@@ -2171,7 +2161,6 @@
 	Table of\nContents	جدول\nالمحتويات
 	Table style	نمط جدول
 	Tables	الجداول
-	Tabloid   11.00" × 17.00"	Tabloid   11.00" × 17.00"
 	Tabs	نقاط الجدولة
 	Tabs…	نقاط الجدولة…
 	Tabular List	قائمة جدولية
@@ -2476,3 +2465,155 @@ preview	Title	رئيسي
 	R	يمين
 	B	أسفل
 	Border	الحد
+
+# Keys added on main up to fd0bb2f, translated after the merge (L10N-AR.17).
+# Bookmark, Track Changes Options › Comments, status-bar language, fonts, alignment guides.
+	Delete Bookmark	حذف الإشارة المرجعية
+	Hidden bookmarks	الإشارات المرجعية المخفية
+	Sort by:	الفرز حسب:
+	In the margin	في الهامش
+	Only for the selected text	للنص المحدد فقط
+	{language} (no dictionary)	{language} (بلا قاموس)
+	No spelling dictionary for {language} is installed, so it isn't checked. WordCraft looks for the Hunspell dictionary {name} in the WORDCRAFT_DICTIONARIES folder and in the usual system locations.	لا يوجد قاموس إملائي مثبّت للغة {language}، لذا لا يُدقَّق النص. يبحث WordCraft عن قاموس Hunspell {name} في المجلد WORDCRAFT_DICTIONARIES وفي مواقع النظام المعتادة.
+	Narrow  {size} all	ضيقة  {size} من كل الجهات
+	Normal  {size} all	عادية  {size} من كل الجهات
+	Type Character Code	كتابة رمز الحرف
+	Croatian	الكرواتية
+	Show alignment guides when moving pictures and shapes	إظهار أدلة المحاذاة عند نقل الصور والأشكال
+	Moved objects snap to the page's edges and centre, the margins and other objects. Hold Alt to move freely.	تلتصق العناصر المنقولة بحواف الصفحة ومنتصفها وبالهوامش وبالعناصر الأخرى. اضغط Alt مع الاستمرار للنقل بحرية.
+	Load System Installed Fonts…	تحميل خطوط النظام المثبّتة…
+	All system fonts are already available.	كل خطوط النظام متاحة بالفعل.
+	Local font access is not supported by your browser.	لا يدعم متصفحك الوصول إلى الخطوط المحلية.
+	Local font access was denied.	رُفض الوصول إلى الخطوط المحلية.
+	Loaded {count} system fonts.	خطوط النظام المحمَّلة: {count}.
+# Table style parts.
+	Odd Banded Rows	الصفوف المتناوبة الفردية
+	Even Banded Rows	الصفوف المتناوبة الزوجية
+	Odd Banded Columns	الأعمدة المتناوبة الفردية
+	Even Banded Columns	الأعمدة المتناوبة الزوجية
+	Top Left Cell	الخلية العلوية اليسرى
+	Top Right Cell	الخلية العلوية اليمنى
+	Bottom Left Cell	الخلية السفلية اليسرى
+	Bottom Right Cell	الخلية السفلية اليمنى
+	Inside Horizontal Border	الحد الأفقي الداخلي
+	Inside Vertical Border	الحد العمودي الداخلي
+# Mail merge: filter and sort recipients.
+	Filter Recipients	تصفية المستلمين
+	Sort Recipients	فرز المستلمين
+	Filter and Sort	التصفية والفرز
+	And	و
+	Or	أو
+	Comparison	المقارنة
+	Compare to	المقارنة مع
+	Add Condition	إضافة شرط
+	Remove condition	إزالة الشرط
+	Sort by	الفرز حسب
+	Then by	ثم حسب
+	Ascending	تصاعدي
+	Descending	تنازلي
+	Equal to	يساوي
+	Not equal to	لا يساوي
+	Less than	أصغر من
+	Greater than	أكبر من
+	Less than or equal	أصغر من أو يساوي
+	Greater than or equal	أكبر من أو يساوي
+	Is blank	فارغ
+	Is not blank	غير فارغ
+	Contains	يحتوي على
+	Does not contain	لا يحتوي على
+	{count} of {total} recipients will be merged.	المستلمون الذين سيُدمجون: {count} من {total}.
+# Fields: STYLEREF and cross-reference switches.
+	Text of the nearest paragraph with a given style (running headers)	نص أقرب فقرة بنمط معيّن (رؤوس متغيرة)
+	Style name:	اسم النمط:
+	Take the last match on the page	أخذ آخر تطابق في الصفحة
+	Show its list number	إظهار رقمها في القائمة
+	Show its number relative to this field	إظهار رقمها نسبةً إلى هذا الحقل
+	Show its number with all higher levels	إظهار رقمها مع كل المستويات الأعلى
+	Number only, without the label's words	الرقم فقط، دون كلمات التسمية
+	Add whether it is above or below	إضافة موضعها: أعلى أو أسفل
+	Copy to	نسخ إلى
+# Title bar: Rename Document, account; saving.
+	Rename Document	إعادة تسمية المستند
+	Document name	اسم المستند
+	Rename	إعادة تسمية
+	Account	الحساب
+	Waiting for the save to finish…	في انتظار انتهاء الحفظ…
+	Saving {name} was cancelled, so it is still open and nothing was lost.	أُلغي حفظ {name}، لذا ما زال مفتوحًا ولم يُفقد شيء.
+# Page Setup › Paper; full screen on the web.
+	Paper	الورق
+	Paper size:	حجم الورق:
+	Custom size	حجم مخصص
+	More Paper Sizes…	مزيد من أحجام الورق…
+	The margins don't fit on a page this size; make the margins smaller first.	لا تتسع الهوامش في صفحة بهذا الحجم؛ صغّر الهوامش أولًا.
+	Full Screen	ملء الشاشة
+	Full\nScreen	ملء\nالشاشة
+	Use the browser's full screen (F11)	استخدام وضع ملء الشاشة في المتصفح (F11)
+# #1128: size labels, status-bar messages, Reading Mode and Go To.
+	{name}   {height} × {width} in	{name}   {height} × {width} بوصة
+	{name}   {height} × {width} mm	{name}   {height} × {width} مم
+	{width} × {height} mm	{width} × {height} مم
+	{kind}, {columns} × {rows}, {size} ({paper})	{kind}، {columns} × {rows}، {size} ({paper})
+	Researcher needs an online service; WordCraft keeps your documents offline.	يحتاج البحث المعرفي إلى خدمة عبر الإنترنت؛ ويُبقي WordCraft مستنداتك دون اتصال.
+	These settings will be used for new documents.	ستُستخدم هذه الإعدادات للمستندات الجديدة.
+	can't split at the first row	لا يمكن التقسيم عند الصف الأول
+	select two or more cells to merge	حدّد خليتين أو أكثر لدمجها
+	there is no ink to replay	لا يوجد حبر لإعادة تشغيله
+	there's no citation after the caret	لا يوجد استشهاد بعد مؤشر الكتابة
+	this item is already at the top level	هذا العنصر في المستوى الأعلى بالفعل
+	Envelope #10	مظروف #10
+	Envelope DL	مظروف DL
+	Reading Mode	وضع القراءة
+	Column width	عرض العمود
+	Text size	حجم النص
+	Edit Document	تحرير المستند
+	Go to what:	الانتقال إلى:
+	Type +2 or -1 to move from the page you are on.	اكتب +2 أو -1 للانتقال من الصفحة الحالية.
+	Suggested	مقترحة
+	Set Proofing Language…	تعيين لغة التدقيق…
+	Language Preferences…	تفضيلات اللغة…
+# Print: printers, two-sided printing, job feedback.
+	Printer	الطابعة
+	Select a printer	اختيار طابعة
+	Refresh printers	تحديث قائمة الطابعات
+	Two-sided printing	الطباعة على الوجهين
+	Printer default	الإعداد الافتراضي للطابعة
+	One-sided	على وجه واحد
+	Two-sided: long edge	على الوجهين: الحافة الطويلة
+	Two-sided: short edge	على الوجهين: الحافة القصيرة
+	Grayscale	تدرج الرمادي
+	Finding printers…	جارٍ البحث عن الطابعات…
+	No printers found. Configure a system printer or export a PDF.	لم يُعثر على طابعات. اضبط طابعة في النظام أو صدّر ملف PDF.
+	Printer discovery failed.	تعذّر البحث عن الطابعات.
+	Submitting print job…	جارٍ إرسال مهمة الطباعة…
+	Print job submitted.	أُرسلت مهمة الطباعة.
+	Print job submitted: {receipt}	أُرسلت مهمة الطباعة: {receipt}
+	Print failed: the printing worker stopped.	فشلت الطباعة: توقفت عملية الطباعة.
+	Print settings	إعدادات الطباعة
+	Submit print job	إرسال مهمة الطباعة
+# Cross-reference dialog; dictionaries folder.
+	For which item:	لأي عنصر:
+	Heading	عنوان
+	Heading text	نص العنوان
+	Insert reference to:	إدراج مرجع إلى:
+	Reference type:	نوع المرجع:
+	Dictionaries	القواميس
+	Dictionaries folder:	مجلد القواميس:
+	Not set: the system's usual places	غير معيّن: مواقع النظام المعتادة
+	Hunspell .aff and .dic files here (pl_PL, pt_BR, it_IT, hr_HR, tr_TR) are used before the system's.	تُستخدم ملفات Hunspell (.aff و.dic) الموجودة هنا (pl_PL, pt_BR, it_IT, hr_HR, tr_TR) قبل ملفات النظام.
+	{language}: {file}	{language}: {file}
+	{language}: no dictionary found	{language}: لم يُعثر على قاموس
+# Backstage › Recover; Page Setup › Mirror margins; Insert Hyperlink places.
+	Recover	استرداد
+	Mirror margins	هوامش متقابلة
+	Existing File or Web Page	ملف موجود أو صفحة ويب
+	Link to:	ارتباط إلى:
+	Place in This Document	موضع في هذا المستند
+# Table Layout › Sort and Formula; Reading Mode column widths.
+	Column {n}	العمود {n}
+	Header row	صف رأس
+	No header row	بلا صف رأس
+	My list has	تحتوي قائمتي على
+	Formula:	الصيغة:
+	Paste function:	لصق دالة:
+	Narrow	ضيق
+	Medium	متوسط

@@ -416,6 +416,23 @@ pub fn checkbox<'a>(ui: &mut Ui, checked: &'a mut bool, atoms: impl IntoAtoms<'a
     if !is_rtl() {
         return ui.checkbox(checked, atoms);
     }
+    rtl_checkbox(ui, checked, false, atoms)
+}
+
+/// A check box shown as neither on nor off (a setting that differs across the selection); a
+/// click reports `clicked` and the caller decides. English: exactly
+/// `ui.add(egui::Checkbox::new(&mut false, atoms).indeterminate(true))`. RTL: the box right of
+/// its label, with egui's dash in it.
+pub fn checkbox_indeterminate(ui: &mut Ui, text: &str) -> Response {
+    let mut off = false;
+    if !is_rtl() {
+        return ui.add(egui::Checkbox::new(&mut off, text).indeterminate(true));
+    }
+    rtl_checkbox(ui, &mut off, true, text)
+}
+
+/// The right-to-left check box of [`checkbox`] and [`checkbox_indeterminate`].
+fn rtl_checkbox<'a>(ui: &mut Ui, checked: &mut bool, indeterminate: bool, atoms: impl IntoAtoms<'a>) -> Response {
     let id = ui.next_auto_id();
     let state = ui.ctx().read_response(id).map(|r| r.widget_state()).unwrap_or_default();
     let egui::widget_style::CheckboxStyle { check_size, checkbox_frame, checkbox_size, frame, check_stroke, text_style } =
@@ -449,7 +466,10 @@ pub fn checkbox<'a>(ui: &mut Ui, checked: &'a mut bool, atoms: impl IntoAtoms<'a
             checkbox_frame.stroke,
             egui::StrokeKind::Inside,
         ));
-        if on {
+        if indeterminate {
+            // egui's dash across the box.
+            ui.painter().add(egui::Shape::hline(small.x_range(), small.center().y, check_stroke));
+        } else if on {
             // The check mark is a tick, not a direction: drawn as in English.
             ui.painter().add(egui::Shape::line(
                 vec![

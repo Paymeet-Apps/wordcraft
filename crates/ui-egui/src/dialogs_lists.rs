@@ -410,6 +410,7 @@ pub struct TrackForm {
     pub insertions_deletions: bool,
     pub formatting: bool,
     pub balloons: String,
+    pub comment_display: String,
     pub insert_mark: String,
     /// Hex, empty = by author.
     pub insert_color: String,
@@ -433,6 +434,7 @@ impl TrackForm {
             insertions_deletions: b("insertionsDeletions"),
             formatting: b("formatting"),
             balloons: s("balloons"),
+            comment_display: s("commentDisplay"),
             insert_mark: s("insertMark"),
             insert_color: c("insertColor"),
             delete_mark: s("deleteMark"),
@@ -452,6 +454,7 @@ impl TrackForm {
             "insertionsDeletions": self.insertions_deletions,
             "formatting": self.formatting,
             "balloons": self.balloons,
+            "commentDisplay": self.comment_display,
             "insertMark": self.insert_mark,
             "insertColor": or(&self.insert_color, "byAuthor"),
             "deleteMark": self.delete_mark,
@@ -548,6 +551,10 @@ pub fn track_options(app: &mut WordApp, ui: &mut Ui, f: &mut TrackForm) -> bool 
         ("commentsAndFormatting", "Show only comments and formatting in balloons"),
     ] {
         rtl::radio_value(ui, &mut f.balloons, v.to_string(), tl!(l));
+    }
+    heading(ui, "Comments");
+    for (v, l) in [("margin", "In the margin"), ("selected", "Only for the selected text")] {
+        rtl::radio_value(ui, &mut f.comment_display, v.to_string(), tl!(l));
     }
     heading(ui, "Advanced");
     rtl::fitted(ui, "tco_advanced", |ui| {
@@ -671,6 +678,8 @@ mod tests {
         assert_eq!(a.run("review.trackingOptions", json!({})).unwrap(), json!({"pending": "trackChangesOptions"}));
         let Some(Dialog::TrackOptions { form }) = &mut a.dialog else { panic!("dialog") };
         assert_eq!((form.insert_mark.as_str(), form.balloons.as_str(), form.insert_color.as_str()), ("underline", "commentsAndFormatting", ""));
+        assert_eq!(form.comment_display, "margin", "comments stay in the margin, as in Word, unless chosen otherwise (#1055)");
+        form.comment_display = "selected".into();
         form.insert_mark = "doubleUnderline".into();
         form.changed_lines = "right".into();
         form.changed_lines_color = "FF0000".into();
@@ -679,6 +688,7 @@ mod tests {
         a.run("review.trackingOptions", params).unwrap();
         let m = &a.session.prefs.markup;
         assert_eq!(m.insert_mark, wordcraft_layout::display::InsertMark::DoubleUnderline);
+        assert_eq!(m.comment_display, wordcraft_layout::display::CommentDisplay::Selected);
         assert_eq!(m.changed_lines_color, Some(wordcraft_doc::Rgb(0xFF, 0, 0)));
         // Saved and restored with the preferences.
         let saved = a.prefs();

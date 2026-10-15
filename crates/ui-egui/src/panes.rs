@@ -258,8 +258,9 @@ fn bidi_snippet(
 }
 
 /// Constrain each heading to the available pane width so long document text cannot
-/// enlarge the panel. The full heading stays accessible on hover. Headings draw in bidi order
-/// (an Arabic heading reads right to left in any interface language).
+/// enlarge the panel. Hovering shows the heading's first [`HEADING_SHOWN_CHARS`] characters
+/// (the whole heading when shorter). Headings draw in bidi order (an Arabic heading reads right
+/// to left in any interface language).
 ///
 /// Only the first [`HEADING_SHOWN_CHARS`] characters are drawn or measured (a heading can be a
 /// whole 64 KiB paragraph), and the hover text is built only while hovered.
@@ -270,15 +271,17 @@ fn nav_heading(ui: &mut Ui, level: u8, text: &str, selected: bool) -> egui::Resp
         ui.add_space(level as f32 * 14.0);
         let room = ui.available_width() - 2.0 * ui.spacing().button_padding.x;
         let shown = fit_user_text(ui, text, &font, room);
-        ui.add_sized(
-            vec2(ui.available_width(), ui.spacing().interact_size.y),
-            egui::Button::selectable(selected, egui::RichText::new(shown).font(font)).truncate(),
+        let label = egui::RichText::new(shown).font(font);
+        // The grow atom takes the spare width, so the text starts flush at the start edge under
+        // its parent instead of centred, as in Word (#1199): after the text, or before it under RTL.
+        let atoms = if crate::rtl::is_rtl() { (egui::Atom::grow(), label.into()) } else { (label.into(), egui::Atom::grow()) };
+        ui.add_sized(vec2(ui.available_width(), ui.spacing().interact_size.y), egui::Button::selectable(selected, atoms).truncate()).on_hover_ui(
+            |ui| {
+                // As `Response::on_hover_text`, but the text is converted only while hovered.
+                ui.set_max_width(ui.spacing().tooltip_width);
+                ui.add(egui::Label::new(crate::i18n::user_text(text).into_owned()));
+            },
         )
-        .on_hover_ui(|ui| {
-            // As `Response::on_hover_text`, but the text is converted only while hovered.
-            ui.set_max_width(ui.spacing().tooltip_width);
-            ui.add(egui::Label::new(crate::i18n::user_text(text).into_owned()));
-        })
     })
     .inner
 }
@@ -1017,6 +1020,34 @@ mod navigation_tests {
             output.drop_without_applying_deltas();
         }
     }
+
+    /// Word lists headings flush left, each level indented under its parent (#1199).
+    #[test]
+    fn headings_align_left_and_indent_by_level() {
+        let text_left = |level: u8| {
+            let ctx = egui::Context::default();
+            crate::theme::install_fonts(&ctx);
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(900.0, 600.0));
+            let mut panel_left = 0.0;
+            let output = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+                let result = egui::Panel::left("navigation_test").default_size(260.0).show(ui, |ui| nav_heading(ui, level, "Kilns", false));
+                panel_left = result.response.rect.min.x;
+            });
+            let x = output
+                .shapes
+                .iter()
+                .find_map(|s| match &s.shape {
+                    egui::Shape::Text(t) if t.galley.text() == "Kilns" => Some(t.pos.x + t.galley.rect.min.x),
+                    _ => None,
+                })
+                .unwrap();
+            output.drop_without_applying_deltas();
+            x - panel_left
+        };
+        let (top, second) = (text_left(0), text_left(1));
+        assert!(top < 30.0, "a top-level heading starts at the pane's left edge, not centred: {top}px in");
+        assert!((second - top - 14.0).abs() < 0.5, "a level-2 heading is indented 14px under its parent: {top} / {second}");
+    }
 }
 
 /// Document and user text in the panes draws in bidi order in any interface language (L10N-AR.14):
@@ -1226,5 +1257,20 @@ mod chrome_text_tests {
         assert!(h.query_by_label(&author).is_some(), "the author draws as {author:?}");
         let text = visual("راجع هذه الفقرة", true);
         assert!(h.query_by_label(&text).is_some(), "the comment text draws as {text:?}");
+    }
+
+    /// The Style Inspector's descriptions go through `i18n::labeled`: "Font: Arial" reads label
+    /// first under RTL (the label drawn at the right of the value); English is unchanged.
+    #[test]
+    fn style_descriptions_read_label_first_in_arabic() {
+        let ar = crate::i18n::Lang::from_code("ar").unwrap();
+        crate::i18n::set_current(ar);
+        let (font, size) = (super::describe("font", &json!("Arial")), super::describe("size", &json!(14.0)));
+        let (font_label, size_label) = (crate::i18n::tr(ar, "Font").to_string(), crate::i18n::tr(ar, "Size").to_string());
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(font.starts_with("Arial") && font.ends_with(&font_label), "{font:?}");
+        assert!(size.ends_with(&size_label), "{size:?}");
+        assert_eq!(super::describe("font", &json!("Arial")), "Font: Arial");
+        assert_eq!(super::describe("size", &json!(14.0)), "Size: 14 pt");
     }
 }
